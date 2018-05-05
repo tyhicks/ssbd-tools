@@ -54,7 +54,10 @@ int get_prctl(void)
 	int rc = prctl(PR_GET_SPECULATION_CTRL, PR_SPEC_STORE_BYPASS, 0, 0, 0);
 
 	if (rc < 0)
-		perror("prctl PR_GET_SPECULATION_CTRL");
+		if (errno == EINVAL)
+			fprintf(stderr, "This kernel does not support per-process speculation control\n");
+		else
+			perror("prctl PR_GET_SPECULATION_CTRL");
 
 	return rc;
 }
@@ -79,12 +82,12 @@ int set_prctl(void)
 	return rc;
 }
 
-void print_prctl(void)
+int print_prctl(void)
 {
 	int rc = get_prctl();
 
 	if (rc < 0)
-		return;
+		return rc;
 
 	switch (rc) {
 	case PR_SPEC_NOT_AFFECTED:
@@ -103,6 +106,8 @@ void print_prctl(void)
 		printf("vulnerable\n");
 		break;
 	}
+
+	return 0;
 }
 
 int seccomp(unsigned int operation, unsigned int flags, void *args)
@@ -170,9 +175,8 @@ int main(int argc, char **argv)
 	else
 		rc = 0;
 
-	if (rc != 0)
+	if (rc != 0 || print_prctl() < 0)
 		exit(1);
 
-	print_prctl();
 	exit(0);
 }
