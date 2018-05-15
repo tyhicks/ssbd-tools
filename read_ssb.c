@@ -139,7 +139,7 @@ int load_seccomp_filter(void)
 		return rc;
 	}
 
-	rc = seccomp(SECCOMP_SET_MODE_FILTER, SECCOMP_FILTER_FLAG_LOG, &prog);
+	rc = seccomp(SECCOMP_SET_MODE_FILTER, 0, &prog);
 	if (rc < 0) {
 		perror("seccomp");
 		return rc;
