@@ -48,6 +48,7 @@
 # define PR_SPEC_PRCTL		(1UL << 0)
 # define PR_SPEC_ENABLE		(1UL << 1)
 # define PR_SPEC_DISABLE	(1UL << 2)
+# define PR_SPEC_FORCE_DISABLE	(1UL << 3)
 
 int get_prctl(void)
 {
@@ -96,10 +97,14 @@ int print_prctl(void)
 	case PR_SPEC_PRCTL | PR_SPEC_DISABLE:
 		printf("thread mitigated\n");
 		break;
+	case PR_SPEC_PRCTL | PR_SPEC_FORCE_DISABLE:
+		printf("thread mitigated (force)\n");
+		break;
 	case PR_SPEC_PRCTL | PR_SPEC_ENABLE:
 		printf("thread vulnerable\n");
 		break;
 	case PR_SPEC_DISABLE:
+	case PR_SPEC_FORCE_DISABLE:
 		printf("globally mitigated\n");
 		break;
 	default:
