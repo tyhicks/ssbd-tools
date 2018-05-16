@@ -22,6 +22,7 @@
 #include <fcntl.h>
 #include <inttypes.h>
 #include <sched.h>
+#include <stdbool.h>
 #include <stddef.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -232,30 +233,51 @@ int usage(const char *prog)
 	exit(1);
 }
 
+struct options {
+	bool prctl;
+	bool seccomp;
+};
+
+void parse_opts(int argc, char **argv, struct options *opts)
+{
+	const char *prog = argv[0];
+	int o;
+
+	memset(opts, 0, sizeof(*opts));
+	while ((o = getopt(argc, argv, "ps")) != -1) {
+		switch(o) {
+		case 'p': /* prctl */
+			opts->prctl = true;
+			break;
+		case 's': /* seccomp */
+			opts->seccomp = true;
+			break;
+		default:
+			usage(prog);
+		}
+	}
+
+	if (optind < argc)
+		usage(prog);
+
+	if (opts->prctl && opts->seccomp)
+		usage(prog);
+}
+
 int main(int argc, char **argv)
 {
-	int use_prctl = 0;
-	int use_seccomp = 0;
+	struct options opts;
 	int ssbd;
 	int rc;
 
-	if (argc == 2) {
-		if (!strcmp(argv[1], "-p"))
-			use_prctl = 1;
-		else if (!strcmp(argv[1], "-s"))
-			use_seccomp = 1;
-		else
-			usage(argv[0]);
-	} else if (argc != 1) {
-		usage(argv[0]);
-	}
+	parse_opts(argc, argv, &opts);
 
 	if (restrict_to_cpu(0))
 		exit(1);
 
-	if (use_prctl)
+	if (opts.prctl)
 		rc = set_prctl();
-	else if (use_seccomp)
+	else if (opts.seccomp)
 		rc = load_seccomp_filter();
 	else
 		rc = 0;
