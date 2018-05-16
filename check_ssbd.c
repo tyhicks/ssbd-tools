@@ -227,7 +227,7 @@ int restrict_to_cpu(int cpu)
 
 int usage(const char *prog)
 {
-	fprintf(stderr, "Usage: %s [-p|-s]\n\n", prog);
+	fprintf(stderr, "Usage: %s [-p] [-s]\n\n", prog);
 	fprintf(stderr, "  -p		Use PR_SET_SPECULATION_CTRL\n");
 	fprintf(stderr, "  -s		Use a permissive seccomp filter\n");
 	exit(1);
@@ -259,30 +259,22 @@ void parse_opts(int argc, char **argv, struct options *opts)
 
 	if (optind < argc)
 		usage(prog);
-
-	if (opts->prctl && opts->seccomp)
-		usage(prog);
 }
 
 int main(int argc, char **argv)
 {
 	struct options opts;
 	int ssbd;
-	int rc;
 
 	parse_opts(argc, argv, &opts);
 
 	if (restrict_to_cpu(0))
 		exit(1);
 
-	if (opts.prctl)
-		rc = set_prctl();
-	else if (opts.seccomp)
-		rc = load_seccomp_filter();
-	else
-		rc = 0;
+	if (opts.prctl && set_prctl())
+		exit(1);
 
-	if (rc < 0)
+	if (opts.seccomp && load_seccomp_filter())
 		exit(1);
 
 	ssbd = get_prctl();
