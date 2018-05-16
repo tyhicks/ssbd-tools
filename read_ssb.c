@@ -84,17 +84,12 @@ int set_prctl(void)
 	return rc;
 }
 
-int print_prctl(void)
+void print_prctl(int ssbd)
 {
-	int rc = get_prctl();
-
-	if (rc < 0)
-		return rc;
-
 	/* The printed strings should match what's in the kernel's
 	 * task_seccomp() function
 	 */
-	switch (rc) {
+	switch (ssbd) {
 	case PR_SPEC_NOT_AFFECTED:
 		printf("not vulnerable\n");
 		break;
@@ -114,8 +109,6 @@ int print_prctl(void)
 		printf("vulnerable\n");
 		break;
 	}
-
-	return 0;
 }
 
 int seccomp(unsigned int operation, unsigned int flags, void *args)
@@ -177,6 +170,7 @@ int main(int argc, char **argv)
 {
 	int use_prctl = 0;
 	int use_seccomp = 0;
+	int ssbd;
 	int rc;
 
 	if (argc == 2) {
@@ -200,8 +194,14 @@ int main(int argc, char **argv)
 	else
 		rc = 0;
 
-	if (rc != 0 || print_prctl() < 0)
+	if (rc < 0)
 		exit(1);
+
+	ssbd = get_prctl();
+	if (ssbd < 0)
+		exit(1);
+
+	print_prctl(ssbd);
 
 	exit(0);
 }
