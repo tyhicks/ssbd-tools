@@ -62,6 +62,13 @@
 
 #define IA32_SPEC_CTRL_MSR	0x48
 
+int exec(const char *prog, char **argv)
+{
+	execvp(prog, argv);
+	perror("execv");
+	return -1;
+}
+
 int verify_prctl(int cpu, int ssbd)
 {
 	char msr_path[64];
@@ -231,7 +238,7 @@ int restrict_to_cpu(int cpu)
 
 int usage(const char *prog)
 {
-	fprintf(stderr, "Usage: %s [options]\n\n", prog);
+	fprintf(stderr, "Usage: %s [options] [-- ... [-- ...]]\n\n", prog);
 	fprintf(stderr, "  -p VALUE     Use PR_SET_SPECULATION_CTRL with the specified value. Valid\n"
 			"               values for VALUE are:\n"
 			"                \"enable\" for PR_SPEC_ENABLE\n"
@@ -241,6 +248,9 @@ int usage(const char *prog)
 		        "               values for FLAGS are:\n"
 			"                \"empty\" for 0\n"
 			"                \"spec-allow\" for SECCOMP_FILTER_FLAG_SPEC_ALLOW\n");
+	fprintf(stderr, "\nIf \"--\" is encountered, execv() will be called using the following argument\n"
+			"as the program to execute and passing it all of the arguments following the\n"
+			"program name.\n");
 	exit(1);
 }
 
@@ -249,6 +259,8 @@ struct options {
 	unsigned long prctl_value;
 	bool seccomp;
 	unsigned int seccomp_flags;
+	const char *exec;
+	char **exec_argv;
 };
 
 void parse_opts(int argc, char **argv, struct options *opts)
@@ -284,8 +296,14 @@ void parse_opts(int argc, char **argv, struct options *opts)
 		}
 	}
 
-	if (optind < argc)
-		usage(prog);
+	if (optind < argc) {
+		/* Ensure that the first non-option is "--" */
+		if (optind == 0 || strcmp("--", argv[optind - 1]))
+			usage(prog);
+
+		opts->exec = argv[optind];
+		opts->exec_argv = &argv[optind];
+	}
 }
 
 int main(int argc, char **argv)
@@ -310,6 +328,9 @@ int main(int argc, char **argv)
 
 	print_prctl(ssbd);
 	if (verify_prctl(0, ssbd) < 0)
+		exit(1);
+
+	if (opts.exec && exec(opts.exec, opts.exec_argv))
 		exit(1);
 
 	exit(0);
