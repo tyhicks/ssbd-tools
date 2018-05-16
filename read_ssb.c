@@ -91,6 +91,9 @@ int print_prctl(void)
 	if (rc < 0)
 		return rc;
 
+	/* The printed strings should match what's in the kernel's
+	 * task_seccomp() function
+	 */
 	switch (rc) {
 	case PR_SPEC_NOT_AFFECTED:
 		printf("not vulnerable\n");
@@ -99,13 +102,12 @@ int print_prctl(void)
 		printf("thread mitigated\n");
 		break;
 	case PR_SPEC_PRCTL | PR_SPEC_FORCE_DISABLE:
-		printf("thread mitigated (force)\n");
+		printf("thread force mitigated\n");
 		break;
 	case PR_SPEC_PRCTL | PR_SPEC_ENABLE:
 		printf("thread vulnerable\n");
 		break;
 	case PR_SPEC_DISABLE:
-	case PR_SPEC_FORCE_DISABLE:
 		printf("globally mitigated\n");
 		break;
 	default:
