@@ -1,5 +1,5 @@
 /*
- * read-ssb.c: Read the Speculative Store Bypass status after using prctl/seccomp
+ * check-ssbd.c: Read the Speculative Store Bypass Disable status after using prctl/seccomp
  * Copyright (C) 2018 Canonical LTD.
  * Author: Tyler Hicks <tyhicks@canonical.com>
  *

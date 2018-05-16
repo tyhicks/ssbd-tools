@@ -1,7 +1,7 @@
 .PHONY: all clean
 
 all:
-	$(CC) -o read-ssb read_ssb.c
+	$(CC) -o check-ssbd check_ssbd.c
 
 clean:
-	rm -f read-ssb
+	rm -f check-ssbd
