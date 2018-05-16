@@ -139,7 +139,7 @@ int get_prctl(void)
 	return rc;
 }
 
-int set_prctl(void)
+int set_prctl(unsigned long value)
 {
 	int rc;
 
@@ -148,7 +148,7 @@ int set_prctl(void)
 		return rc;
 
 	rc = prctl(PR_SET_SPECULATION_CTRL, PR_SPEC_STORE_BYPASS,
-		   PR_SPEC_DISABLE, 0, 0);
+		   value, 0, 0);
 	if (rc < 0)
 		perror("prctl PR_SET_SPECULATION_CTRL");
 
@@ -232,7 +232,11 @@ int restrict_to_cpu(int cpu)
 int usage(const char *prog)
 {
 	fprintf(stderr, "Usage: %s [options]\n\n", prog);
-	fprintf(stderr, "  -p           Use PR_SET_SPECULATION_CTRL\n");
+	fprintf(stderr, "  -p VALUE     Use PR_SET_SPECULATION_CTRL with the specified value. Valid\n"
+			"               values for VALUE are:\n"
+			"                \"enable\" for PR_SPEC_ENABLE\n"
+			"                \"disable\" for PR_SPEC_DISABLE\n"
+			"                \"force-disable\" for PR_SPEC_FORCE_DISABLE\n");
 	fprintf(stderr, "  -s FLAGS     Use a permissive seccomp filter with the specified flags. Valid\n"
 		        "               values for FLAGS are:\n"
 			"                \"empty\" for 0\n"
@@ -242,6 +246,7 @@ int usage(const char *prog)
 
 struct options {
 	bool prctl;
+	unsigned long prctl_value;
 	bool seccomp;
 	unsigned int seccomp_flags;
 };
@@ -252,10 +257,18 @@ void parse_opts(int argc, char **argv, struct options *opts)
 	int o;
 
 	memset(opts, 0, sizeof(*opts));
-	while ((o = getopt(argc, argv, "ps:")) != -1) {
+	while ((o = getopt(argc, argv, "p:s:")) != -1) {
 		switch(o) {
 		case 'p': /* prctl */
 			opts->prctl = true;
+			if (!strcmp(optarg, "enable"))
+				opts->prctl_value = PR_SPEC_ENABLE;
+			else if (!strcmp(optarg, "disable"))
+				opts->prctl_value = PR_SPEC_DISABLE;
+			else if (!strcmp(optarg, "force-disable"))
+				opts->prctl_value = PR_SPEC_FORCE_DISABLE;
+			else
+				usage(prog);
 			break;
 		case 's': /* seccomp */
 			opts->seccomp = true;
@@ -285,7 +298,7 @@ int main(int argc, char **argv)
 	if (restrict_to_cpu(0))
 		exit(1);
 
-	if (opts.prctl && set_prctl())
+	if (opts.prctl && set_prctl(opts.prctl_value))
 		exit(1);
 
 	if (opts.seccomp && load_seccomp_filter(opts.seccomp_flags))
