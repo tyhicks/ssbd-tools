@@ -19,6 +19,7 @@
 
 #define _GNU_SOURCE
 #include <errno.h>
+#include <sched.h>
 #include <stddef.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -148,6 +149,20 @@ int load_seccomp_filter(void)
 	return 0;
 }
 
+int restrict_to_cpu(int cpu)
+{
+	cpu_set_t set;
+	int rc;
+
+	CPU_ZERO(&set);
+	CPU_SET(cpu, &set);
+	rc = sched_setaffinity(0, sizeof(set), &set);
+	if (rc < 0)
+		perror("sched_setaffinity");
+
+	return rc;
+}
+
 int usage(const char *prog)
 {
 	fprintf(stderr, "Usage: %s [-p|-s]\n\n", prog);
@@ -172,6 +187,9 @@ int main(int argc, char **argv)
 	} else if (argc != 1) {
 		usage(argv[0]);
 	}
+
+	if (restrict_to_cpu(0))
+		exit(1);
 
 	if (use_prctl)
 		rc = set_prctl();
