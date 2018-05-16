@@ -56,6 +56,10 @@
 # define PR_SPEC_DISABLE	(1UL << 2)
 # define PR_SPEC_FORCE_DISABLE	(1UL << 3)
 
+#ifndef SECCOMP_FILTER_FLAG_SPEC_ALLOW
+#define SECCOMP_FILTER_FLAG_SPEC_ALLOW (1UL << 2)
+#endif
+
 #define IA32_SPEC_CTRL_MSR	0x48
 
 int verify_prctl(int cpu, int ssbd)
@@ -183,7 +187,7 @@ int seccomp(unsigned int operation, unsigned int flags, void *args)
 	return syscall(SYS_seccomp, operation, flags, args);
 }
 
-int load_seccomp_filter(void)
+int load_seccomp_filter(unsigned int flags)
 {
 	struct sock_filter filter[] = {
 		BPF_STMT(BPF_LD|BPF_W|BPF_ABS,
@@ -202,7 +206,7 @@ int load_seccomp_filter(void)
 		return rc;
 	}
 
-	rc = seccomp(SECCOMP_SET_MODE_FILTER, 0, &prog);
+	rc = seccomp(SECCOMP_SET_MODE_FILTER, flags, &prog);
 	if (rc < 0) {
 		perror("seccomp");
 		return rc;
@@ -227,15 +231,19 @@ int restrict_to_cpu(int cpu)
 
 int usage(const char *prog)
 {
-	fprintf(stderr, "Usage: %s [-p] [-s]\n\n", prog);
-	fprintf(stderr, "  -p		Use PR_SET_SPECULATION_CTRL\n");
-	fprintf(stderr, "  -s		Use a permissive seccomp filter\n");
+	fprintf(stderr, "Usage: %s [options]\n\n", prog);
+	fprintf(stderr, "  -p           Use PR_SET_SPECULATION_CTRL\n");
+	fprintf(stderr, "  -s FLAGS     Use a permissive seccomp filter with the specified flags. Valid\n"
+		        "               values for FLAGS are:\n"
+			"                \"empty\" for 0\n"
+			"                \"spec-allow\" for SECCOMP_FILTER_FLAG_SPEC_ALLOW\n");
 	exit(1);
 }
 
 struct options {
 	bool prctl;
 	bool seccomp;
+	unsigned int seccomp_flags;
 };
 
 void parse_opts(int argc, char **argv, struct options *opts)
@@ -244,13 +252,19 @@ void parse_opts(int argc, char **argv, struct options *opts)
 	int o;
 
 	memset(opts, 0, sizeof(*opts));
-	while ((o = getopt(argc, argv, "ps")) != -1) {
+	while ((o = getopt(argc, argv, "ps:")) != -1) {
 		switch(o) {
 		case 'p': /* prctl */
 			opts->prctl = true;
 			break;
 		case 's': /* seccomp */
 			opts->seccomp = true;
+			if (!strcmp(optarg, "empty"))
+				opts->seccomp_flags = 0;
+			else if (!strcmp(optarg, "spec-allow"))
+				opts->seccomp_flags = SECCOMP_FILTER_FLAG_SPEC_ALLOW;
+			else
+				usage(prog);
 			break;
 		default:
 			usage(prog);
@@ -274,7 +288,7 @@ int main(int argc, char **argv)
 	if (opts.prctl && set_prctl())
 		exit(1);
 
-	if (opts.seccomp && load_seccomp_filter())
+	if (opts.seccomp && load_seccomp_filter(opts.seccomp_flags))
 		exit(1);
 
 	ssbd = get_prctl();
