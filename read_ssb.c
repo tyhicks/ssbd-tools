@@ -55,11 +55,15 @@ int get_prctl(void)
 {
 	int rc = prctl(PR_GET_SPECULATION_CTRL, PR_SPEC_STORE_BYPASS, 0, 0, 0);
 
-	if (rc < 0)
+	if (rc < 0) {
 		if (errno == EINVAL)
 			fprintf(stderr, "This kernel does not support per-process speculation control\n");
 		else
 			perror("prctl PR_GET_SPECULATION_CTRL");
+	} else if (!(rc & PR_SPEC_PRCTL)) {
+		fprintf(stderr, "Speculation cannot be controlled via prctl\n");
+		rc = -1;
+	}
 
 	return rc;
 }
@@ -69,12 +73,8 @@ int set_prctl(void)
 	int rc;
 
 	rc = get_prctl();
-	if (rc < 0) {
+	if (rc < 0)
 		return rc;
-	} else if (!(rc & PR_SPEC_PRCTL)) {
-		fprintf(stderr, "Speculation cannot be controlled via prctl\n");
-		return -EOPNOTSUPP;
-	}
 
 	rc = prctl(PR_SET_SPECULATION_CTRL, PR_SPEC_STORE_BYPASS,
 		   PR_SPEC_DISABLE, 0, 0);
