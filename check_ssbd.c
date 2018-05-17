@@ -417,6 +417,7 @@ int usage(const char *prog)
 	fprintf(stderr,
 		"Usage: %s [options] [-- ...]\n\n"
 		"Valid options are:\n"
+		"  -q            Don't print the string represenation of the prctl value\n"
 		"  -p VALUE      Use PR_SET_SPECULATION_CTRL with the specified value. Valid\n"
 		"                values for VALUE are:\n"
 		"                 \"enable\" for PR_SPEC_ENABLE\n"
@@ -458,6 +459,8 @@ struct options {
 	bool fork;		/* True if fork() should happen before exec() */
 	const char *exec;	/* Program to exec */
 	char **exec_argv;	/* Arguments to pass to program */
+
+	bool quiet;		/* Whether to print the prctl value */
 };
 
 /* Parses the command line options and stores the results in opts */
@@ -469,7 +472,7 @@ void parse_opts(int argc, char **argv, struct options *opts)
 	memset(opts, 0, sizeof(*opts));
 	opts->seconds = (time_t) -1;
 
-	while ((o = getopt(argc, argv, "e:fp:s:")) != -1) {
+	while ((o = getopt(argc, argv, "e:fp:qs:")) != -1) {
 		char *secs = NULL;
 
 		switch(o) {
@@ -502,6 +505,9 @@ void parse_opts(int argc, char **argv, struct options *opts)
 				opts->prctl_value = PR_SPEC_FORCE_DISABLE;
 			else
 				usage(prog);
+			break;
+		case 'q': /* quiet */
+			opts->quiet = true;
 			break;
 		case 's': /* seccomp */
 			opts->seccomp = true;
@@ -559,7 +565,8 @@ int main(int argc, char **argv)
 	if (prctl_value < 0)
 		exit(EXIT_FAILURE);
 
-	print_prctl(prctl_value);
+	if (!opts.quiet)
+		print_prctl(prctl_value);
 
 	/* Verify that the returned prctl value matches with the MSR */
 	if (opts.verify_ssbd && verify_prctl(msr_fd, prctl_value))
