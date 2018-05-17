@@ -445,16 +445,19 @@ int usage(const char *prog)
 }
 
 struct options {
-	bool fork;
-	bool prctl;
-	unsigned long prctl_value;
-	bool seccomp;
-	unsigned int seccomp_flags;
-	bool verify_ssbd;
-	bool ssbd; /* expected ssbd */
-	time_t seconds; /* seconds to verify ssbd */
-	const char *exec;
-	char **exec_argv;
+	bool prctl;			/* Whether to use the spec prctl */
+	unsigned long prctl_value;	/* The prctl's value */
+
+	bool seccomp;			/* Whether to load a seccomp filter */
+	unsigned int seccomp_flags;	/* The seccomp filter flags */
+
+	bool verify_ssbd;	/* Whether to verify the SSBD bit with rdmsr */
+	bool ssbd;		/* Expected ssbd */
+	time_t seconds;		/* Seconds to verify ssbd (wall time) */
+
+	bool fork;		/* True if fork() should happen before exec() */
+	const char *exec;	/* Program to exec */
+	char **exec_argv;	/* Arguments to pass to program */
 };
 
 /* Parses the command line options and stores the results in opts */
