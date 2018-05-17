@@ -528,6 +528,9 @@ void parse_opts(int argc, char **argv, struct options *opts)
 		fprintf(stderr, "-f is only valid with \"-- ...\"\n");
 		usage(prog);
 	}
+
+	if (!opts->verify_ssbd)
+		fprintf(stderr, "WARNING: Not verifying the SSBD bit with rdmsr (-e) may result in an incomplete test\n");
 }
 
 int main(int argc, char **argv)
