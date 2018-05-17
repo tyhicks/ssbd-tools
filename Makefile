@@ -1,7 +1,10 @@
-.PHONY: all clean
+.PHONY: check clean
 
-all:
+check-ssbd:
 	$(CC) -o check-ssbd check_ssbd.c
+
+check: check-ssbd
+	@./test.sh && echo PASS
 
 clean:
 	rm -f check-ssbd
