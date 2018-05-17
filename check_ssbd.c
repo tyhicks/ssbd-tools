@@ -63,6 +63,7 @@
 #endif
 
 #define IA32_SPEC_CTRL_MSR	0x48
+#define DEFAULT_CPU		0
 
 /* Execute prog with argv as the arguments
  *
@@ -500,10 +501,10 @@ int main(int argc, char **argv)
 
 	parse_opts(argc, argv, &opts);
 
-	if (restrict_to_cpu(0))
+	if (restrict_to_cpu(DEFAULT_CPU))
 		exit(EXIT_FAILURE);
 
-	msr_fd = open_msr_fd(0);
+	msr_fd = open_msr_fd(DEFAULT_CPU);
 	if (msr_fd < 0)
 		exit(EXIT_FAILURE);
 
