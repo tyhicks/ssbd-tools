@@ -1,0 +1,11 @@
+To build the program, run make:
+
+ $ make
+
+It will create an executable called check-ssbd. See the program's usage output
+for details on how to drive it.
+
+To run some automated tests, run the check target as root:
+
+ $ sudo make check
+ PASS
