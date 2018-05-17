@@ -111,28 +111,6 @@ int exec(const char *prog, char **argv)
 	return -1;
 }
 
-/* Fork and exec a program in the child process, returning in the parent process
- *
- * The parent returns the pid of the child process on success. The parent
- * returns -1 on error. The child executes the program prog or exits non-zero
- * on error.
- */
-pid_t fork_and_exec(const char *prog, char **argv)
-{
-	int pid = fork();
-
-	if (pid < 0) {
-		fprintf(stderr, "ERROR: Couldn't fork a new process: %m\n");
-		return -1;
-	} else if (!pid) {
-		exec(prog, argv);
-		exit(EXIT_FAILURE);
-	}
-
-	/* The parent continues on */
-	return pid;
-}
-
 /* Open the /dev/cpu/CPUNUM/msr file where CPUNUM is specified by cpu
  *
  * Returns a valid file descriptor, open for reading, on success. -1 on error.
@@ -235,6 +213,34 @@ int verify_ssbd_bit(int msr_fd, bool expected, time_t seconds)
 		 (seconds != ((time_t) -1) && cur < stop));
 
 	return 0;
+}
+
+/* Fork, verify the SSBD bit, and exec a program in the child process
+ *
+ * If verify is false, msr_fd and expected are ignored.
+ *
+ * The parent returns the pid of the child process on success. The parent
+ * returns -1 on error. The child executes the program prog or exits non-zero
+ * on error.
+ */
+pid_t fork_verify_exec(bool verify, int msr_fd, bool expected,
+		       const char *prog, char **argv)
+{
+	int pid = fork();
+
+	if (pid < 0) {
+		fprintf(stderr, "ERROR: Couldn't fork a new process: %m\n");
+		return -1;
+	} else if (!pid) {
+		/* Do a single SSBD verification in the child after forking */
+		if (verify && verify_ssbd_bit(msr_fd, expected, (time_t) -1))
+			exit(EXIT_FAILURE);
+		exec(prog, argv);
+		exit(EXIT_FAILURE);
+	}
+
+	/* The parent continues on */
+	return pid;
 }
 
 /* Verify that the prctl value matches the SSBD bit from the IA32_SPEC_CTRL MSR
@@ -426,9 +432,10 @@ int usage(const char *prog)
 		"                seconds of wall time. If SECS is 0, the loop is doesn't end until\n"
 	        "                the program is interrupted.\n"
 		"                If the -f option is in use, a single SSBD bit verification is\n"
-		"                performed prior to forking off a child process. Once the parent\n"
-		"                returns from the call to fork(), SSBD bit verification is performed\n"
-		"                according to the specified SECS.\n"
+		"                performed prior to forking off a child process and another in\n"
+		"                the child after forking. Once the parent returns from the call\n"
+		"                to fork(), SSBD bit verification is performed according to the\n"
+		"                specified SECS.\n"
 		"  -f            Fork before executing another program. This option is only\n"
 		"                valid when \"--\" is present.\n"
 		"\nIf \"--\" is encountered, execv() will be called using the following argument\n"
@@ -556,7 +563,10 @@ int main(int argc, char **argv)
 		    verify_ssbd_bit(msr_fd, opts.ssbd_bit, (time_t) -1))
 			exit(EXIT_FAILURE);
 
-		pid = fork_and_exec(opts.exec, opts.exec_argv);
+		/* This will do a single SSBD verification after forking */
+		pid = fork_verify_exec(opts.verify_ssbd_bit, msr_fd,
+				       opts.ssbd_bit,
+				       opts.exec, opts.exec_argv);
 		if (pid < 0)
 			exit(EXIT_FAILURE);
 	}
