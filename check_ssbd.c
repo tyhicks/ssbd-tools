@@ -330,7 +330,8 @@ int restrict_to_cpu(int cpu)
 int usage(const char *prog)
 {
 	fprintf(stderr,
-		"Usage: %s [options] [-- ... [-- ...]]\n\n"
+		"Usage: %s [options] [-- ...]\n\n"
+		"Valid options are:\n"
 		"  -p VALUE      Use PR_SET_SPECULATION_CTRL with the specified value. Valid\n"
 		"                values for VALUE are:\n"
 		"                 \"enable\" for PR_SPEC_ENABLE\n"
@@ -346,7 +347,7 @@ int usage(const char *prog)
 		"                seconds of wall time. If SECS is 0, the loop is doesn't end until\n"
 	        "                the program is interrupted.\n"
 		"  -f            Fork before executing another program. This option is only\n"
-		"                valid when \"--\" is present."
+		"                valid when \"--\" is present.\n"
 		"\nIf \"--\" is encountered, execv() will be called using the following argument\n"
 		"as the program to execute and passing it all of the arguments following the\n"
 		"program name.\n", prog);
