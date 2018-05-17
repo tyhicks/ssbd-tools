@@ -267,21 +267,22 @@ int restrict_to_cpu(int cpu)
 
 int usage(const char *prog)
 {
-	fprintf(stderr, "Usage: %s [options] [-- ... [-- ...]]\n\n", prog);
-	fprintf(stderr, "  -p VALUE     Use PR_SET_SPECULATION_CTRL with the specified value. Valid\n"
-			"               values for VALUE are:\n"
-			"                \"enable\" for PR_SPEC_ENABLE\n"
-			"                \"disable\" for PR_SPEC_DISABLE\n"
-			"                \"force-disable\" for PR_SPEC_FORCE_DISABLE\n");
-	fprintf(stderr, "  -s FLAGS     Use a permissive seccomp filter with the specified flags. Valid\n"
-		        "               values for FLAGS are:\n"
-			"                \"empty\" for 0\n"
-			"                \"spec-allow\" for SECCOMP_FILTER_FLAG_SPEC_ALLOW\n");
-	fprintf(stderr, "  -f           Fork before executing another program. This option is only\n"
-			"               valid when \"--\" is present.");
-	fprintf(stderr, "\nIf \"--\" is encountered, execv() will be called using the following argument\n"
-			"as the program to execute and passing it all of the arguments following the\n"
-			"program name.\n");
+	fprintf(stderr,
+		"Usage: %s [options] [-- ... [-- ...]]\n\n"
+		"  -p VALUE     Use PR_SET_SPECULATION_CTRL with the specified value. Valid\n"
+		"               values for VALUE are:\n"
+		"                \"enable\" for PR_SPEC_ENABLE\n"
+		"                \"disable\" for PR_SPEC_DISABLE\n"
+		"                \"force-disable\" for PR_SPEC_FORCE_DISABLE\n"
+		"  -s FLAGS     Use a permissive seccomp filter with the specified flags. Valid\n"
+	        "               values for FLAGS are:\n"
+		"                \"empty\" for 0\n"
+		"                \"spec-allow\" for SECCOMP_FILTER_FLAG_SPEC_ALLOW\n"
+		"  -f           Fork before executing another program. This option is only\n"
+		"               valid when \"--\" is present."
+		"\nIf \"--\" is encountered, execv() will be called using the following argument\n"
+		"as the program to execute and passing it all of the arguments following the\n"
+		"program name.\n", prog);
 	exit(1);
 }
 
