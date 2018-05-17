@@ -560,7 +560,9 @@ int main(int argc, char **argv)
 		exit(EXIT_FAILURE);
 
 	print_prctl(prctl_value);
-	if (verify_prctl(msr_fd, prctl_value))
+
+	/* Verify that the returned prctl value matches with the MSR */
+	if (opts.verify_ssbd && verify_prctl(msr_fd, prctl_value))
 		exit(EXIT_FAILURE);
 
 	if (opts.fork) {
