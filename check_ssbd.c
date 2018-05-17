@@ -432,12 +432,12 @@ int usage(const char *prog)
 		"                specified, the MSR is reread and verified in a loop for SECS\n"
 		"                seconds of wall time. If SECS is 0, the loop is doesn't end until\n"
 	        "                the program is interrupted.\n"
-		"                If the -f option is in use, a single SSBD bit verification is\n"
+		"                Unless the -n option is in use, a single SSBD bit verification is\n"
 		"                performed prior to forking off a child process and another in\n"
 		"                the child after forking. Once the parent returns from the call\n"
 		"                to fork(), SSBD bit verification is performed according to the\n"
 		"                specified SECS.\n"
-		"  -f            Fork before executing another program. This option is only\n"
+		"  -n            Do NOT fork before executing another program. This option is only\n"
 		"                valid when \"--\" is present.\n"
 		"\nIf \"--\" is encountered, execv() will be called using the following argument\n"
 		"as the program to execute and passing it all of the arguments following the\n"
@@ -471,8 +471,9 @@ void parse_opts(int argc, char **argv, struct options *opts)
 
 	memset(opts, 0, sizeof(*opts));
 	opts->seconds = (time_t) -1;
+	opts->fork = true;
 
-	while ((o = getopt(argc, argv, "e:fp:qs:")) != -1) {
+	while ((o = getopt(argc, argv, "e:np:qs:")) != -1) {
 		char *secs = NULL;
 
 		switch(o) {
@@ -492,8 +493,8 @@ void parse_opts(int argc, char **argv, struct options *opts)
 				opts->seconds = atol(secs);
 
 			break;
-		case 'f': /* fork */
-			opts->fork = true;
+		case 'n': /* no fork */
+			opts->fork = false;
 			break;
 		case 'p': /* prctl */
 			opts->prctl = true;
@@ -530,8 +531,8 @@ void parse_opts(int argc, char **argv, struct options *opts)
 
 		opts->exec = argv[optind];
 		opts->exec_argv = &argv[optind];
-	} else if (opts->fork) {
-		fprintf(stderr, "-f is only valid with \"-- ...\"\n");
+	} else if (!opts->fork) {
+		fprintf(stderr, "-n is only valid with \"-- ...\"\n");
 		usage(prog);
 	}
 
@@ -572,7 +573,7 @@ int main(int argc, char **argv)
 	if (opts.verify_ssbd && verify_prctl(msr_fd, prctl_value))
 		exit(EXIT_FAILURE);
 
-	if (opts.fork) {
+	if (opts.exec && opts.fork) {
 		/* Do a single SSBD verification prior to forking */
 		if (opts.verify_ssbd &&
 		    verify_ssbd(msr_fd, opts.ssbd, (time_t) -1))
@@ -588,7 +589,7 @@ int main(int argc, char **argv)
 	if (opts.verify_ssbd && verify_ssbd(msr_fd, opts.ssbd, opts.seconds))
 		exit(EXIT_FAILURE);
 
-	if (opts.fork)
+	if (opts.exec && opts.fork)
 		exit_after_child(pid);
 	else if (opts.exec && exec(opts.exec, opts.exec_argv))
 		exit(EXIT_FAILURE);
