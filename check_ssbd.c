@@ -252,7 +252,7 @@ int verify_prctl(int msr_fd, int prctl_value)
 	bool ssbd;
 
 	if (read_ssbd_from_msr(msr_fd, &ssbd)) {
-		fprintf(stderr, "ERROR: Couldn't perofrm prctl value verification\n");
+		fprintf(stderr, "ERROR: Couldn't perform prctl value verification\n");
 		return -1;
 	}
 
