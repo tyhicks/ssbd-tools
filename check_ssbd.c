@@ -49,14 +49,29 @@
 
 /* Speculation control variants */
 #ifndef PR_SPEC_STORE_BYPASS
-# define PR_SPEC_STORE_BYPASS	0
+#define PR_SPEC_STORE_BYPASS	0
 #endif
+
 /* Return and control values for PR_SET/GET_SPECULATION_CTRL */
-# define PR_SPEC_NOT_AFFECTED	0
-# define PR_SPEC_PRCTL		(1UL << 0)
-# define PR_SPEC_ENABLE		(1UL << 1)
-# define PR_SPEC_DISABLE	(1UL << 2)
-# define PR_SPEC_FORCE_DISABLE	(1UL << 3)
+#ifndef PR_SPEC_NOT_AFFECTED
+#define PR_SPEC_NOT_AFFECTED	0
+#endif
+
+#ifndef PR_SPEC_PRCTL
+#define PR_SPEC_PRCTL		(1UL << 0)
+#endif
+
+#ifndef PR_SPEC_ENABLE
+#define PR_SPEC_ENABLE		(1UL << 1)
+#endif
+
+#ifndef PR_SPEC_DISABLE
+#define PR_SPEC_DISABLE		(1UL << 2)
+#endif
+
+#ifndef PR_SPEC_FORCE_DISABLE
+#define PR_SPEC_FORCE_DISABLE	(1UL << 3)
+#endif
 
 #ifndef SECCOMP_FILTER_FLAG_SPEC_ALLOW
 #define SECCOMP_FILTER_FLAG_SPEC_ALLOW (1UL << 2)
