@@ -187,17 +187,17 @@ int verify_ssbd_bit(int msr_fd, bool expected, time_t seconds)
 	return 0;
 }
 
-int verify_prctl(int msr_fd, int ssbd)
+int verify_prctl(int msr_fd, int prctl_value)
 {
-	bool actual_ssbd;
+	bool ssbd;
 
-	if (read_ssbd_bit_from_msr(msr_fd, &actual_ssbd))
+	if (read_ssbd_bit_from_msr(msr_fd, &ssbd))
 		return -1;
 
-	switch (ssbd) {
+	switch (prctl_value) {
 	case PR_SPEC_NOT_AFFECTED:
 	case PR_SPEC_PRCTL | PR_SPEC_ENABLE:
-		if (actual_ssbd) {
+		if (ssbd) {
 			fprintf(stderr, "Bit 2 of IA32_SPEC_CTRL MSR is unexpectedly set");
 			return -1;
 		}
@@ -205,14 +205,15 @@ int verify_prctl(int msr_fd, int ssbd)
 	case PR_SPEC_PRCTL | PR_SPEC_DISABLE:
 	case PR_SPEC_PRCTL | PR_SPEC_FORCE_DISABLE:
 	case PR_SPEC_DISABLE:
-		if (!actual_ssbd) {
+		if (!ssbd) {
 			fprintf(stderr, "Bit 2 of IA32_SPEC_CTRL MSR is unexpectedly clear");
 			return -1;
 		}
 		break;
 	default:
 		fprintf(stderr,
-			"Unknown SSBD status (0x%x); can't verify MSR\n", ssbd);
+			"Unknown prctl value (0x%x); can't verify MSR\n",
+			prctl_value);
 		return -1;
 	}
 
@@ -438,7 +439,7 @@ int main(int argc, char **argv)
 {
 	struct options opts;
 	int msr_fd;
-	int ssbd;
+	int prctl_value;
 
 	parse_opts(argc, argv, &opts);
 
@@ -455,12 +456,12 @@ int main(int argc, char **argv)
 	if (opts.seccomp && load_seccomp_filter(opts.seccomp_flags))
 		exit(1);
 
-	ssbd = get_prctl();
-	if (ssbd < 0)
+	prctl_value = get_prctl();
+	if (prctl_value < 0)
 		exit(1);
 
-	print_prctl(ssbd);
-	if (verify_prctl(msr_fd, ssbd) < 0)
+	print_prctl(prctl_value);
+	if (verify_prctl(msr_fd, prctl_value) < 0)
 		exit(1);
 
 	if (opts.verify_ssbd_bit &&
