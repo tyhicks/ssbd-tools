@@ -64,41 +64,55 @@
 
 #define IA32_SPEC_CTRL_MSR	0x48
 
+/* Execute prog with argv as the arguments
+ *
+ * Doesn't return on success. Returns -1 on error.
+ */
 int exec(const char *prog, char **argv)
 {
 	execvp(prog, argv);
-	perror("execv");
+	fprintf(stderr, "ERROR: Couldn't execute %s: %m\n", prog);
 	return -1;
 }
 
+/* Fork and wait on the child process to exit
+ *
+ * The parent exits with the status of the child or returns -1 on error. The
+ * child returns 0 on success.
+ */
 int do_fork()
 {
 	int pid = fork();
 
 	if (pid < 0) {
-		perror("fork");
-		exit(1);
+		fprintf(stderr, "ERROR: Couldn't fork a new process: %m\n");
+		return -1;
 	} else if (pid) {
 		int status;
+		int rc;
 
 		/* The parent waits for the child and exits */
 		if (waitpid(pid, &status, 0) < 0) {
-			perror("waitpid");
-			exit(1);
+			fprintf(stderr, "ERROR: Couldn't wait for child to exit: %m\n");
+			return -1;
 		}
 
-		if (WIFEXITED(status))
-			exit(WEXITSTATUS(status));
-		else if (WIFSIGNALED(status))
-			exit(WTERMSIG(status));
+		if (WIFEXITED(status)) {
+			rc = WEXITSTATUS(status);
+		} else if (WIFSIGNALED(status))
+			rc = 1;
 
-		exit(1);
+		exit(rc);
 	}
 
 	/* The child continues on */
 	return 0;
 }
 
+/* Open the /dev/cpu/CPUNUM/msr file where CPUNUM is specified by cpu
+ *
+ * Returns a valid file descriptor, open for reading, on success. -1 on error.
+ */
 int open_msr_fd(int cpu)
 {
 	char msr_path[64];
@@ -107,16 +121,17 @@ int open_msr_fd(int cpu)
 
 	rc = snprintf(msr_path, sizeof(msr_path), "/dev/cpu/%d/msr", cpu);
 	if (rc < 0 || rc >= sizeof(msr_path) ){
-		fprintf(stderr, "%s: Failed to construct MSR path", __func__);
+		fprintf(stderr, "ERROR: Couldn't construct the MSR path\n");
 		return -1;
 	}
 
 	msr_fd = open(msr_path, O_RDONLY | O_CLOEXEC);
 	if (msr_fd < 0) {
 		if (errno == ENOENT) {
-			fprintf(stderr, "Please load the msr module and try again\n");
+			fprintf(stderr, "ERROR: The msr kernel module is not loaded\n");
 		} else {
-			perror("open");
+			fprintf(stderr, "ERROR: Couldn't open MSR file (%s): %m\n",
+				msr_path);
 		}
 		return -1;
 	}
@@ -124,6 +139,12 @@ int open_msr_fd(int cpu)
 	return msr_fd;
 }
 
+/* Read the SSBD bit from the IA32_SPEC_CTRL MSR
+ *
+ * Sets *ssbd to true if the bit is 1, false if the bit is 0.
+ *
+ * Returns 0 on success. -1 on error.
+ */
 int read_ssbd_bit_from_msr(int msr_fd, bool *ssbd)
 {
 	uint64_t value;
@@ -131,10 +152,10 @@ int read_ssbd_bit_from_msr(int msr_fd, bool *ssbd)
 
 	rc = pread(msr_fd, &value, sizeof(value), IA32_SPEC_CTRL_MSR);
 	if (rc < 0) {
-		perror("pread");
+		fprintf(stderr, "ERROR: Couldn't read MSR file: %m\n");
 		return -1;
 	} else if (rc != sizeof(value)) {
-		fprintf(stderr, "%s: short read of the MSR\n", __func__);
+		fprintf(stderr, "ERROR: Short read of the MSR file\n");
 		return -1;
 	}
 
@@ -142,9 +163,14 @@ int read_ssbd_bit_from_msr(int msr_fd, bool *ssbd)
 	return 0;
 }
 
-/* If seconds is 0, loop until the user interrupts the loop.
- * If seconds is (time_t) -1, only verify once.
- * Otherwise, loop until we exceed the time at function call time plus seconds.
+/* Reads the SSBD bit from the IA32_SPEC_CTRL MSR and verifies its value
+ *
+ * The expected argument should be true if the bit is expected to be 1. False
+ * if it is expected to be 0.
+ *
+ * If seconds is 0, loop until the user interrupts the loop. If seconds is
+ * (time_t) -1, only verify once. Otherwise, loop until the time at the
+ * function entry time added to the number in the seconds argument is reached.
  *
  * Return 0 on success. -1 on error. 1 on a failed verification.
  */
@@ -155,7 +181,7 @@ int verify_ssbd_bit(int msr_fd, bool expected, time_t seconds)
 
 	stop = time(NULL);
 	if (stop == (time_t) -1) {
-		perror("time");
+		fprintf(stderr, "ERROR: Couldn't initialize the stop timer: %m\n");
 		return -1;
 	}
 
@@ -165,20 +191,20 @@ int verify_ssbd_bit(int msr_fd, bool expected, time_t seconds)
 		int rc = read_ssbd_bit_from_msr(msr_fd, &actual);
 
 		if (rc) {
-			fprintf(stderr, "SSBD bit verification could not be completed\n");
+			fprintf(stderr, "ERROR: Couldn't perform SSBD bit verification\n");
 			return -1;
 		}
 
 		if (actual != expected) {
 			rc = 1;
-			fprintf(stderr, "SSBD bit verification failed (expected %d, got %d)\n",
+			fprintf(stderr, "FAIL: SSBD bit verification failed (expected %d, got %d)\n",
 				expected, actual);
 			return 1;
 		}
 
 		cur = time(NULL);
 		if (cur == (time_t) -1) {
-			perror("time");
+			fprintf(stderr, "ERROR: Couldn't get the current time: %m\n");
 			return -1;
 		}
 	} while (seconds == 0 ||
@@ -187,32 +213,37 @@ int verify_ssbd_bit(int msr_fd, bool expected, time_t seconds)
 	return 0;
 }
 
+/* Verify that the prctl value matches the SSBD bit from the IA32_SPEC_CTRL MSR
+ *
+ * Returns 0 on success. -1 on error. 1 on a failed verification.
+ */
 int verify_prctl(int msr_fd, int prctl_value)
 {
 	bool ssbd;
 
-	if (read_ssbd_bit_from_msr(msr_fd, &ssbd))
+	if (read_ssbd_bit_from_msr(msr_fd, &ssbd)) {
+		fprintf(stderr, "ERROR: Couldn't perofrm prctl value verification\n");
 		return -1;
+	}
 
 	switch (prctl_value) {
 	case PR_SPEC_NOT_AFFECTED:
 	case PR_SPEC_PRCTL | PR_SPEC_ENABLE:
 		if (ssbd) {
-			fprintf(stderr, "Bit 2 of IA32_SPEC_CTRL MSR is unexpectedly set");
-			return -1;
+			fprintf(stderr, "FAIL: SSBD bit of the IA32_SPEC_CTRL MSR is unexpectedly set\n");
+			return 1;
 		}
 		break;
 	case PR_SPEC_PRCTL | PR_SPEC_DISABLE:
 	case PR_SPEC_PRCTL | PR_SPEC_FORCE_DISABLE:
 	case PR_SPEC_DISABLE:
 		if (!ssbd) {
-			fprintf(stderr, "Bit 2 of IA32_SPEC_CTRL MSR is unexpectedly clear");
-			return -1;
+			fprintf(stderr, "FAIL: SSBD bit of the IA32_SPEC_CTRL MSR is unexpectedly clear\n");
+			return 1;
 		}
 		break;
 	default:
-		fprintf(stderr,
-			"Unknown prctl value (0x%x); can't verify MSR\n",
+		fprintf(stderr, "ERROR: Couldn't verify Unknown prctl value (0x%x)\n",
 			prctl_value);
 		return -1;
 	}
@@ -220,39 +251,52 @@ int verify_prctl(int msr_fd, int prctl_value)
 	return 0;
 }
 
+/* Get the value of the PR_SPEC_STORE_BYPASS prctl
+ *
+ * Returns the value on success. -1 on error.
+ */
 int get_prctl(void)
 {
 	int rc = prctl(PR_GET_SPECULATION_CTRL, PR_SPEC_STORE_BYPASS, 0, 0, 0);
 
 	if (rc < 0) {
 		if (errno == EINVAL)
-			fprintf(stderr, "This kernel does not support per-process speculation control\n");
+			fprintf(stderr, "ERROR: This kernel does not support per-process speculation control\n");
 		else
-			perror("prctl PR_GET_SPECULATION_CTRL");
+			fprintf(stderr, "ERROR: Couldn't get the value of the PR_SPEC_STORE_BYPASS prctl: %m\n");
+		return -1;
 	} else if (!(rc & PR_SPEC_PRCTL)) {
-		fprintf(stderr, "Speculation cannot be controlled via prctl\n");
-		rc = -1;
+		fprintf(stderr, "ERROR: Speculation cannot be controlled via prctl\n");
+		return -1;
 	}
 
 	return rc;
 }
 
+/* Set the value of the PR_SPEC_STORE_BYPASS prctl
+ *
+ * Returns 0 on success. -1 on error.
+ */
 int set_prctl(unsigned long value)
 {
 	int rc;
 
 	rc = get_prctl();
-	if (rc < 0)
-		return rc;
+	if (rc < 0) {
+		fprintf(stderr, "ERROR: Couldn't get the value of the PR_SPEC_STORE_BYPASS prctl and, therefore, cannot set it\n");
+		return -1;
+	}
 
-	rc = prctl(PR_SET_SPECULATION_CTRL, PR_SPEC_STORE_BYPASS,
-		   value, 0, 0);
-	if (rc < 0)
-		perror("prctl PR_SET_SPECULATION_CTRL");
+	rc = prctl(PR_SET_SPECULATION_CTRL, PR_SPEC_STORE_BYPASS, value, 0, 0);
+	if (rc < 0) {
+		fprintf(stderr, "ERROR: Couldn't set the value of the PR_SPEC_STORE_BYPASS prctl: %m\n");
+		return -1;
+	}
 
-	return rc;
+	return 0;
 }
 
+/* Prints a string representation of the PR_SPEC_STORE_BYPASS prctl value */
 void print_prctl(int ssbd)
 {
 	/* The printed strings should match what's in the kernel's
@@ -280,11 +324,19 @@ void print_prctl(int ssbd)
 	}
 }
 
+/* seccomp(2) wrapper
+ *
+ * See the seccomp(2) man page for details.
+ */
 int seccomp(unsigned int operation, unsigned int flags, void *args)
 {
 	return syscall(SYS_seccomp, operation, flags, args);
 }
 
+/* Loads a permissive seccomp filter with the specificied filter flags
+ *
+ * Returns 0 on success. -1 on error.
+ */
 int load_seccomp_filter(unsigned int flags)
 {
 	struct sock_filter filter[] = {
@@ -298,35 +350,38 @@ int load_seccomp_filter(unsigned int flags)
 	};
 	int rc;
 
-	rc = prctl(PR_SET_NO_NEW_PRIVS, 1, 0, 0, 0);
-	if (rc < 0) {
-		perror("prctl PR_SET_NO_NEW_PRIVS");
-		return rc;
+	if (prctl(PR_SET_NO_NEW_PRIVS, 1, 0, 0, 0) < 0) {
+		fprintf(stderr, "ERROR: Couldn't set no new privs: %m\n");
+		return -1;
 	}
 
-	rc = seccomp(SECCOMP_SET_MODE_FILTER, flags, &prog);
-	if (rc < 0) {
-		perror("seccomp");
-		return rc;
+	if (seccomp(SECCOMP_SET_MODE_FILTER, flags, &prog) < 0) {
+		fprintf(stderr, "ERROR: Couldn't load the seccomp filter: %m\n");
+		return -1;
 	}
 
 	return 0;
 }
 
+/* Restricts the current process to only run on the specified CPU
+ *
+ * Returns 0 on success. -1 on error.
+ */
 int restrict_to_cpu(int cpu)
 {
 	cpu_set_t set;
-	int rc;
 
 	CPU_ZERO(&set);
 	CPU_SET(cpu, &set);
-	rc = sched_setaffinity(0, sizeof(set), &set);
-	if (rc < 0)
-		perror("sched_setaffinity");
+	if (sched_setaffinity(0, sizeof(set), &set) < 0) {
+		fprintf(stderr, "ERROR: Couldn't set the CPU affinity mask: %m\n");
+		return -1;
+	}
 
-	return rc;
+	return 0;
 }
 
+/* Prints the usage and exits with an error */
 int usage(const char *prog)
 {
 	fprintf(stderr,
@@ -351,7 +406,7 @@ int usage(const char *prog)
 		"\nIf \"--\" is encountered, execv() will be called using the following argument\n"
 		"as the program to execute and passing it all of the arguments following the\n"
 		"program name.\n", prog);
-	exit(1);
+	exit(EXIT_FAILURE);
 }
 
 struct options {
@@ -367,6 +422,7 @@ struct options {
 	char **exec_argv;
 };
 
+/* Parses the command line options and stores the results in opts */
 void parse_opts(int argc, char **argv, struct options *opts)
 {
 	const char *prog = argv[0];
@@ -445,35 +501,35 @@ int main(int argc, char **argv)
 	parse_opts(argc, argv, &opts);
 
 	if (restrict_to_cpu(0))
-		exit(1);
+		exit(EXIT_FAILURE);
 
 	msr_fd = open_msr_fd(0);
 	if (msr_fd < 0)
-		exit(1);
+		exit(EXIT_FAILURE);
 
 	if (opts.prctl && set_prctl(opts.prctl_value))
-		exit(1);
+		exit(EXIT_FAILURE);
 
 	if (opts.seccomp && load_seccomp_filter(opts.seccomp_flags))
-		exit(1);
+		exit(EXIT_FAILURE);
 
 	prctl_value = get_prctl();
 	if (prctl_value < 0)
-		exit(1);
+		exit(EXIT_FAILURE);
 
 	print_prctl(prctl_value);
-	if (verify_prctl(msr_fd, prctl_value) < 0)
-		exit(1);
+	if (verify_prctl(msr_fd, prctl_value))
+		exit(EXIT_FAILURE);
 
 	if (opts.verify_ssbd_bit &&
 	    verify_ssbd_bit(msr_fd, opts.ssbd_bit, opts.verify_seconds))
-		exit(1);
+		exit(EXIT_FAILURE);
 
 	if (opts.fork && do_fork())
-		exit(1);
+		exit(EXIT_FAILURE);
 
 	if (opts.exec && exec(opts.exec, opts.exec_argv))
-		exit(1);
+		exit(EXIT_FAILURE);
 
-	exit(0);
+	exit(EXIT_SUCCESS);
 }
