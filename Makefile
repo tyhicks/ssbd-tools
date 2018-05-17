@@ -1,6 +1,6 @@
 .PHONY: check clean
 
-check-ssbd:
+check-ssbd: check_ssbd.c
 	$(CC) -o check-ssbd check_ssbd.c
 
 check: check-ssbd
