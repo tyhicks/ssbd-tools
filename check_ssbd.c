@@ -27,6 +27,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <time.h>
 #include <unistd.h>
 #include <linux/seccomp.h>
 #include <linux/filter.h>
@@ -98,10 +99,9 @@ int do_fork()
 	return 0;
 }
 
-int verify_prctl(int cpu, int ssbd)
+int open_msr_fd(int cpu)
 {
 	char msr_path[64];
-	uint64_t value;
 	int msr_fd;
 	int rc;
 
@@ -115,14 +115,19 @@ int verify_prctl(int cpu, int ssbd)
 	if (msr_fd < 0) {
 		if (errno == ENOENT) {
 			fprintf(stderr, "Please load the msr module and try again\n");
-		} else if (errno == EACCES) {
-			fprintf(stderr, "WARNING: Skipping verification of the SPEC_CTRL MSR; run as root to perform verification\n");
-			return 0;
 		} else {
 			perror("open");
 		}
 		return -1;
 	}
+
+	return msr_fd;
+}
+
+int read_ssbd_bit_from_msr(int msr_fd, bool *ssbd)
+{
+	uint64_t value;
+	int rc;
 
 	rc = pread(msr_fd, &value, sizeof(value), IA32_SPEC_CTRL_MSR);
 	if (rc < 0) {
@@ -133,10 +138,66 @@ int verify_prctl(int cpu, int ssbd)
 		return -1;
 	}
 
+	*ssbd = !!(value & 0x4);
+	return 0;
+}
+
+/* If seconds is 0, loop until the user interrupts the loop.
+ * If seconds is (time_t) -1, only verify once.
+ * Otherwise, loop until we exceed the time at function call time plus seconds.
+ *
+ * Return 0 on success. -1 on error. 1 on a failed verification.
+ */
+int verify_ssbd_bit(int msr_fd, bool expected, time_t seconds)
+{
+	time_t cur, stop;
+	int rc;
+
+	stop = time(NULL);
+	if (stop == (time_t) -1) {
+		perror("time");
+		return -1;
+	}
+
+	stop += seconds;
+	do {
+		bool actual;
+		int rc = read_ssbd_bit_from_msr(msr_fd, &actual);
+
+		if (rc) {
+			fprintf(stderr, "SSBD bit verification could not be completed\n");
+			return -1;
+		}
+
+		if (actual != expected) {
+			rc = 1;
+			fprintf(stderr, "SSBD bit verification failed (expected %d, got %d)\n",
+				expected, actual);
+			return 1;
+		}
+
+		cur = time(NULL);
+		if (cur == (time_t) -1) {
+			perror("time");
+			return -1;
+		}
+	} while (seconds == 0 ||
+		 (seconds != ((time_t) -1) && cur < stop));
+
+	return 0;
+}
+
+int verify_prctl(int msr_fd, int ssbd)
+{
+	bool actual_ssbd;
+
+	if (read_ssbd_bit_from_msr(msr_fd, &actual_ssbd))
+		return -1;
+
 	switch (ssbd) {
 	case PR_SPEC_NOT_AFFECTED:
 	case PR_SPEC_PRCTL | PR_SPEC_ENABLE:
-		if (value & 0x4) {
+		if (actual_ssbd) {
 			fprintf(stderr, "Bit 2 of IA32_SPEC_CTRL MSR is unexpectedly set");
 			return -1;
 		}
@@ -144,7 +205,7 @@ int verify_prctl(int cpu, int ssbd)
 	case PR_SPEC_PRCTL | PR_SPEC_DISABLE:
 	case PR_SPEC_PRCTL | PR_SPEC_FORCE_DISABLE:
 	case PR_SPEC_DISABLE:
-		if (!(value & 0x4)) {
+		if (!actual_ssbd) {
 			fprintf(stderr, "Bit 2 of IA32_SPEC_CTRL MSR is unexpectedly clear");
 			return -1;
 		}
@@ -269,17 +330,22 @@ int usage(const char *prog)
 {
 	fprintf(stderr,
 		"Usage: %s [options] [-- ... [-- ...]]\n\n"
-		"  -p VALUE     Use PR_SET_SPECULATION_CTRL with the specified value. Valid\n"
-		"               values for VALUE are:\n"
-		"                \"enable\" for PR_SPEC_ENABLE\n"
-		"                \"disable\" for PR_SPEC_DISABLE\n"
-		"                \"force-disable\" for PR_SPEC_FORCE_DISABLE\n"
-		"  -s FLAGS     Use a permissive seccomp filter with the specified flags. Valid\n"
-	        "               values for FLAGS are:\n"
-		"                \"empty\" for 0\n"
-		"                \"spec-allow\" for SECCOMP_FILTER_FLAG_SPEC_ALLOW\n"
-		"  -f           Fork before executing another program. This option is only\n"
-		"               valid when \"--\" is present."
+		"  -p VALUE      Use PR_SET_SPECULATION_CTRL with the specified value. Valid\n"
+		"                values for VALUE are:\n"
+		"                 \"enable\" for PR_SPEC_ENABLE\n"
+		"                 \"disable\" for PR_SPEC_DISABLE\n"
+		"                 \"force-disable\" for PR_SPEC_FORCE_DISABLE\n"
+		"  -s FLAGS      Use a permissive seccomp filter with the specified flags. Valid\n"
+	        "                values for FLAGS are:\n"
+		"                 \"empty\" for 0\n"
+		"                 \"spec-allow\" for SECCOMP_FILTER_FLAG_SPEC_ALLOW\n"
+		"  -e VAL[:SECS] Verify that the SSBD bit in the IA32_SPEC_CTRL MSR is equal to VAL.\n"
+		"                By default, a single read of the MSR is performed. If :SECS is\n"
+		"                specified, the MSR is reread and verified in a loop for SECS\n"
+		"                seconds of wall time. If SECS is 0, the loop is doesn't end until\n"
+	        "                the program is interrupted.\n"
+		"  -f            Fork before executing another program. This option is only\n"
+		"                valid when \"--\" is present."
 		"\nIf \"--\" is encountered, execv() will be called using the following argument\n"
 		"as the program to execute and passing it all of the arguments following the\n"
 		"program name.\n", prog);
@@ -292,6 +358,9 @@ struct options {
 	unsigned long prctl_value;
 	bool seccomp;
 	unsigned int seccomp_flags;
+	bool verify_ssbd_bit;
+	bool ssbd_bit;
+	time_t verify_seconds;
 	const char *exec;
 	char **exec_argv;
 };
@@ -302,8 +371,28 @@ void parse_opts(int argc, char **argv, struct options *opts)
 	int o;
 
 	memset(opts, 0, sizeof(*opts));
-	while ((o = getopt(argc, argv, "fp:s:")) != -1) {
+	opts->verify_seconds = (time_t) -1;
+
+	while ((o = getopt(argc, argv, "e:fp:s:")) != -1) {
+		char *secs = NULL;
+
 		switch(o) {
+		case 'e': /* expected ssbd bit */
+			opts->verify_ssbd_bit = true;
+			secs = optarg;
+			optarg = strsep(&secs, ":");
+
+			if (!strcmp(optarg, "0"))
+				opts->ssbd_bit = false;
+			else if (!strcmp(optarg, "1"))
+				opts->ssbd_bit = true;
+			else
+				usage(prog);
+
+			if (secs)
+				opts->verify_seconds = atol(secs);
+
+			break;
 		case 'f': /* fork */
 			opts->fork = true;
 			break;
@@ -348,11 +437,16 @@ void parse_opts(int argc, char **argv, struct options *opts)
 int main(int argc, char **argv)
 {
 	struct options opts;
+	int msr_fd;
 	int ssbd;
 
 	parse_opts(argc, argv, &opts);
 
 	if (restrict_to_cpu(0))
+		exit(1);
+
+	msr_fd = open_msr_fd(0);
+	if (msr_fd < 0)
 		exit(1);
 
 	if (opts.prctl && set_prctl(opts.prctl_value))
@@ -366,7 +460,11 @@ int main(int argc, char **argv)
 		exit(1);
 
 	print_prctl(ssbd);
-	if (verify_prctl(0, ssbd) < 0)
+	if (verify_prctl(msr_fd, ssbd) < 0)
+		exit(1);
+
+	if (opts.verify_ssbd_bit &&
+	    verify_ssbd_bit(msr_fd, opts.ssbd_bit, opts.verify_seconds))
 		exit(1);
 
 	if (opts.fork && do_fork())
