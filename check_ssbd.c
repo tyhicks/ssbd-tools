@@ -80,6 +80,26 @@
 #define IA32_SPEC_CTRL_MSR	0x48
 #define DEFAULT_CPU		0
 
+/* Waits for the child to exit and exits with the same return value
+ *
+ * Exits using the child's exit status if the child exited normally. Exits
+ * non-zero on error or if child died unexpectedly.
+ */
+int exit_after_child(pid_t pid)
+{
+	int status;
+
+	if (waitpid(pid, &status, 0) < 0) {
+		fprintf(stderr, "ERROR: Couldn't wait for child to exit: %m\n");
+		exit(EXIT_FAILURE);
+	}
+
+	if (!WIFEXITED(status))
+		exit(EXIT_FAILURE);
+
+	exit(WEXITSTATUS(status));
+}
+
 /* Execute prog with argv as the arguments
  *
  * Doesn't return on success. Returns -1 on error.
@@ -91,38 +111,26 @@ int exec(const char *prog, char **argv)
 	return -1;
 }
 
-/* Fork and wait on the child process to exit
+/* Fork and exec a program in the child process, returning in the parent process
  *
- * The parent exits with the status of the child or returns -1 on error. The
- * child returns 0 on success.
+ * The parent returns the pid of the child process on success. The parent
+ * returns -1 on error. The child executes the program prog or exits non-zero
+ * on error.
  */
-int do_fork()
+pid_t fork_and_exec(const char *prog, char **argv)
 {
 	int pid = fork();
 
 	if (pid < 0) {
 		fprintf(stderr, "ERROR: Couldn't fork a new process: %m\n");
 		return -1;
-	} else if (pid) {
-		int status;
-		int rc;
-
-		/* The parent waits for the child and exits */
-		if (waitpid(pid, &status, 0) < 0) {
-			fprintf(stderr, "ERROR: Couldn't wait for child to exit: %m\n");
-			return -1;
-		}
-
-		if (WIFEXITED(status)) {
-			rc = WEXITSTATUS(status);
-		} else if (WIFSIGNALED(status))
-			rc = EXIT_FAILURE;
-
-		exit(rc);
+	} else if (!pid) {
+		exec(prog, argv);
+		exit(EXIT_FAILURE);
 	}
 
-	/* The child continues on */
-	return 0;
+	/* The parent continues on */
+	return pid;
 }
 
 /* Open the /dev/cpu/CPUNUM/msr file where CPUNUM is specified by cpu
@@ -417,6 +425,10 @@ int usage(const char *prog)
 		"                specified, the MSR is reread and verified in a loop for SECS\n"
 		"                seconds of wall time. If SECS is 0, the loop is doesn't end until\n"
 	        "                the program is interrupted.\n"
+		"                If the -f option is in use, a single SSBD bit verification is\n"
+		"                performed prior to forking off a child process. Once the parent\n"
+		"                returns from the call to fork(), SSBD bit verification is performed\n"
+		"                according to the specified SECS.\n"
 		"  -f            Fork before executing another program. This option is only\n"
 		"                valid when \"--\" is present.\n"
 		"\nIf \"--\" is encountered, execv() will be called using the following argument\n"
@@ -513,6 +525,7 @@ int main(int argc, char **argv)
 	struct options opts;
 	int msr_fd;
 	int prctl_value;
+	pid_t pid;
 
 	parse_opts(argc, argv, &opts);
 
@@ -537,14 +550,24 @@ int main(int argc, char **argv)
 	if (verify_prctl(msr_fd, prctl_value))
 		exit(EXIT_FAILURE);
 
+	if (opts.fork) {
+		/* Do a single SSBD verification prior to forking */
+		if (opts.verify_ssbd_bit &&
+		    verify_ssbd_bit(msr_fd, opts.ssbd_bit, (time_t) -1))
+			exit(EXIT_FAILURE);
+
+		pid = fork_and_exec(opts.exec, opts.exec_argv);
+		if (pid < 0)
+			exit(EXIT_FAILURE);
+	}
+
 	if (opts.verify_ssbd_bit &&
 	    verify_ssbd_bit(msr_fd, opts.ssbd_bit, opts.verify_seconds))
 		exit(EXIT_FAILURE);
 
-	if (opts.fork && do_fork())
-		exit(EXIT_FAILURE);
-
-	if (opts.exec && exec(opts.exec, opts.exec_argv))
+	if (opts.fork)
+		exit_after_child(pid);
+	else if (opts.exec && exec(opts.exec, opts.exec_argv))
 		exit(EXIT_FAILURE);
 
 	exit(EXIT_SUCCESS);
