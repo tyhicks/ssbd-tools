@@ -116,7 +116,7 @@ int do_fork()
 		if (WIFEXITED(status)) {
 			rc = WEXITSTATUS(status);
 		} else if (WIFSIGNALED(status))
-			rc = 1;
+			rc = EXIT_FAILURE;
 
 		exit(rc);
 	}
