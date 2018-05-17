@@ -417,6 +417,7 @@ int usage(const char *prog)
 	fprintf(stderr,
 		"Usage: %s [options] [-- ...]\n\n"
 		"Valid options are:\n"
+		"  -c CPUNUM     Pin the process to the CPUNUM cpu. The default is 0.\n"
 		"  -q            Don't print the string represenation of the prctl value\n"
 		"  -p VALUE      Use PR_SET_SPECULATION_CTRL with the specified value. Valid\n"
 		"                values for VALUE are:\n"
@@ -460,6 +461,8 @@ struct options {
 	const char *exec;	/* Program to exec */
 	char **exec_argv;	/* Arguments to pass to program */
 
+	int cpu;		/* CPU number to restrict the process to */
+
 	bool quiet;		/* Whether to print the prctl value */
 };
 
@@ -472,11 +475,15 @@ void parse_opts(int argc, char **argv, struct options *opts)
 	memset(opts, 0, sizeof(*opts));
 	opts->seconds = (time_t) -1;
 	opts->fork = true;
+	opts->cpu = DEFAULT_CPU;
 
-	while ((o = getopt(argc, argv, "e:np:qs:")) != -1) {
+	while ((o = getopt(argc, argv, "c:e:np:qs:")) != -1) {
 		char *secs = NULL;
 
 		switch(o) {
+		case 'c': /* CPU number */
+			opts->cpu = atoi(optarg);
+			break;
 		case 'e': /* expected ssbd */
 			opts->verify_ssbd = true;
 			secs = optarg;
@@ -549,10 +556,10 @@ int main(int argc, char **argv)
 
 	parse_opts(argc, argv, &opts);
 
-	if (restrict_to_cpu(DEFAULT_CPU))
+	if (restrict_to_cpu(opts.cpu))
 		exit(EXIT_FAILURE);
 
-	msr_fd = open_msr_fd(DEFAULT_CPU);
+	msr_fd = open_msr_fd(opts.cpu);
 	if (msr_fd < 0)
 		exit(EXIT_FAILURE);
 
