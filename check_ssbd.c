@@ -147,7 +147,7 @@ int open_msr_fd(int cpu)
  *
  * Returns 0 on success. -1 on error.
  */
-int read_ssbd_bit_from_msr(int msr_fd, bool *ssbd)
+int read_ssbd_from_msr(int msr_fd, bool *ssbd)
 {
 	uint64_t value;
 	int rc;
@@ -176,7 +176,7 @@ int read_ssbd_bit_from_msr(int msr_fd, bool *ssbd)
  *
  * Return 0 on success. -1 on error. 1 on a failed verification.
  */
-int verify_ssbd_bit(int msr_fd, bool expected, time_t seconds)
+int verify_ssbd(int msr_fd, bool expected, time_t seconds)
 {
 	time_t cur, stop;
 	int rc;
@@ -190,7 +190,7 @@ int verify_ssbd_bit(int msr_fd, bool expected, time_t seconds)
 	stop += seconds;
 	do {
 		bool actual;
-		int rc = read_ssbd_bit_from_msr(msr_fd, &actual);
+		int rc = read_ssbd_from_msr(msr_fd, &actual);
 
 		if (rc) {
 			fprintf(stderr, "ERROR: Couldn't perform SSBD bit verification\n");
@@ -233,7 +233,7 @@ pid_t fork_verify_exec(bool verify, int msr_fd, bool expected,
 		return -1;
 	} else if (!pid) {
 		/* Do a single SSBD verification in the child after forking */
-		if (verify && verify_ssbd_bit(msr_fd, expected, (time_t) -1))
+		if (verify && verify_ssbd(msr_fd, expected, (time_t) -1))
 			exit(EXIT_FAILURE);
 		exec(prog, argv);
 		exit(EXIT_FAILURE);
@@ -251,7 +251,7 @@ int verify_prctl(int msr_fd, int prctl_value)
 {
 	bool ssbd;
 
-	if (read_ssbd_bit_from_msr(msr_fd, &ssbd)) {
+	if (read_ssbd_from_msr(msr_fd, &ssbd)) {
 		fprintf(stderr, "ERROR: Couldn't perofrm prctl value verification\n");
 		return -1;
 	}
@@ -450,9 +450,9 @@ struct options {
 	unsigned long prctl_value;
 	bool seccomp;
 	unsigned int seccomp_flags;
-	bool verify_ssbd_bit;
-	bool ssbd_bit;
-	time_t verify_seconds;
+	bool verify_ssbd;
+	bool ssbd; /* expected ssbd */
+	time_t seconds; /* seconds to verify ssbd */
 	const char *exec;
 	char **exec_argv;
 };
@@ -464,26 +464,26 @@ void parse_opts(int argc, char **argv, struct options *opts)
 	int o;
 
 	memset(opts, 0, sizeof(*opts));
-	opts->verify_seconds = (time_t) -1;
+	opts->seconds = (time_t) -1;
 
 	while ((o = getopt(argc, argv, "e:fp:s:")) != -1) {
 		char *secs = NULL;
 
 		switch(o) {
-		case 'e': /* expected ssbd bit */
-			opts->verify_ssbd_bit = true;
+		case 'e': /* expected ssbd */
+			opts->verify_ssbd = true;
 			secs = optarg;
 			optarg = strsep(&secs, ":");
 
 			if (!strcmp(optarg, "0"))
-				opts->ssbd_bit = false;
+				opts->ssbd = false;
 			else if (!strcmp(optarg, "1"))
-				opts->ssbd_bit = true;
+				opts->ssbd = true;
 			else
 				usage(prog);
 
 			if (secs)
-				opts->verify_seconds = atol(secs);
+				opts->seconds = atol(secs);
 
 			break;
 		case 'f': /* fork */
@@ -559,20 +559,18 @@ int main(int argc, char **argv)
 
 	if (opts.fork) {
 		/* Do a single SSBD verification prior to forking */
-		if (opts.verify_ssbd_bit &&
-		    verify_ssbd_bit(msr_fd, opts.ssbd_bit, (time_t) -1))
+		if (opts.verify_ssbd &&
+		    verify_ssbd(msr_fd, opts.ssbd, (time_t) -1))
 			exit(EXIT_FAILURE);
 
 		/* This will do a single SSBD verification after forking */
-		pid = fork_verify_exec(opts.verify_ssbd_bit, msr_fd,
-				       opts.ssbd_bit,
+		pid = fork_verify_exec(opts.verify_ssbd, msr_fd, opts.ssbd,
 				       opts.exec, opts.exec_argv);
 		if (pid < 0)
 			exit(EXIT_FAILURE);
 	}
 
-	if (opts.verify_ssbd_bit &&
-	    verify_ssbd_bit(msr_fd, opts.ssbd_bit, opts.verify_seconds))
+	if (opts.verify_ssbd && verify_ssbd(msr_fd, opts.ssbd, opts.seconds))
 		exit(EXIT_FAILURE);
 
 	if (opts.fork)
