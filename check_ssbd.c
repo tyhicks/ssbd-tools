@@ -36,6 +36,7 @@
 #include <sys/stat.h>
 #include <sys/syscall.h>
 #include <sys/types.h>
+#include <sys/wait.h>
 
 #ifndef PR_GET_SPECULATION_CTRL
 #define PR_GET_SPECULATION_CTRL 52
@@ -67,6 +68,34 @@ int exec(const char *prog, char **argv)
 	execvp(prog, argv);
 	perror("execv");
 	return -1;
+}
+
+int do_fork()
+{
+	int pid = fork();
+
+	if (pid < 0) {
+		perror("fork");
+		exit(1);
+	} else if (pid) {
+		int status;
+
+		/* The parent waits for the child and exits */
+		if (waitpid(pid, &status, 0) < 0) {
+			perror("waitpid");
+			exit(1);
+		}
+
+		if (WIFEXITED(status))
+			exit(WEXITSTATUS(status));
+		else if (WIFSIGNALED(status))
+			exit(WTERMSIG(status));
+
+		exit(1);
+	}
+
+	/* The child continues on */
+	return 0;
 }
 
 int verify_prctl(int cpu, int ssbd)
@@ -248,6 +277,8 @@ int usage(const char *prog)
 		        "               values for FLAGS are:\n"
 			"                \"empty\" for 0\n"
 			"                \"spec-allow\" for SECCOMP_FILTER_FLAG_SPEC_ALLOW\n");
+	fprintf(stderr, "  -f           Fork before executing another program. This option is only\n"
+			"               valid when \"--\" is present.");
 	fprintf(stderr, "\nIf \"--\" is encountered, execv() will be called using the following argument\n"
 			"as the program to execute and passing it all of the arguments following the\n"
 			"program name.\n");
@@ -255,6 +286,7 @@ int usage(const char *prog)
 }
 
 struct options {
+	bool fork;
 	bool prctl;
 	unsigned long prctl_value;
 	bool seccomp;
@@ -269,8 +301,11 @@ void parse_opts(int argc, char **argv, struct options *opts)
 	int o;
 
 	memset(opts, 0, sizeof(*opts));
-	while ((o = getopt(argc, argv, "p:s:")) != -1) {
+	while ((o = getopt(argc, argv, "fp:s:")) != -1) {
 		switch(o) {
+		case 'f': /* fork */
+			opts->fork = true;
+			break;
 		case 'p': /* prctl */
 			opts->prctl = true;
 			if (!strcmp(optarg, "enable"))
@@ -303,6 +338,9 @@ void parse_opts(int argc, char **argv, struct options *opts)
 
 		opts->exec = argv[optind];
 		opts->exec_argv = &argv[optind];
+	} else if (opts->fork) {
+		fprintf(stderr, "-f is only valid with \"-- ...\"\n");
+		usage(prog);
 	}
 }
 
@@ -328,6 +366,9 @@ int main(int argc, char **argv)
 
 	print_prctl(ssbd);
 	if (verify_prctl(0, ssbd) < 0)
+		exit(1);
+
+	if (opts.fork && do_fork())
 		exit(1);
 
 	if (opts.exec && exec(opts.exec, opts.exec_argv))
