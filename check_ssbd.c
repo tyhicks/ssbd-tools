@@ -77,8 +77,18 @@
 #define SECCOMP_FILTER_FLAG_SPEC_ALLOW (1UL << 2)
 #endif
 
-#define IA32_SPEC_CTRL_MSR	0x48
-#define DEFAULT_CPU_NUM		0
+#define IA32_SPEC_CTRL_MSR		0x48
+#define AMD64_VIRT_SPEC_CTRL_MSR	0xc001011f
+#define AMD64_LS_CFG_MSR		0xc0011020
+
+#define DEFAULT_CPU_NUM			0
+
+typedef enum { CPU_INTEL,
+	       CPU_AMD_VIRT,
+	       CPU_AMD_15H,
+	       CPU_AMD_16H,
+	       CPU_AMD_17H,
+	      } cpu_id;
 
 /* Waits for the child to exit and exits with the same return value
  *
@@ -141,18 +151,42 @@ int open_msr_fd(int cpu_num)
 	return msr_fd;
 }
 
-/* Read the SSBD bit from the IA32_SPEC_CTRL MSR
+/* Read the SSBD bit from the MSR corresponding to cpu_id
  *
  * Sets *ssbd to true if the bit is 1, false if the bit is 0.
  *
  * Returns 0 on success. -1 on error.
  */
-int read_ssbd_from_msr(int msr_fd, bool *ssbd)
+int read_ssbd_from_msr(int msr_fd, cpu_id cpu_id, bool *ssbd)
 {
-	uint64_t value;
+	uint64_t mask, value;
+	off_t msr;
 	int rc;
 
-	rc = pread(msr_fd, &value, sizeof(value), IA32_SPEC_CTRL_MSR);
+	switch (cpu_id) {
+	case CPU_AMD_VIRT:
+		msr = AMD64_VIRT_SPEC_CTRL_MSR;
+		mask = 1ULL << 2;
+		break;
+	case CPU_AMD_15H:
+		msr = AMD64_LS_CFG_MSR;
+		mask = 1ULL << 54;
+		break;
+	case CPU_AMD_16H:
+		msr = AMD64_LS_CFG_MSR;
+		mask = 1ULL << 33;
+		break;
+	case CPU_AMD_17H:
+		msr = AMD64_LS_CFG_MSR;
+		mask = 1ULL << 10;
+		break;
+	case CPU_INTEL:
+	default:
+		msr = IA32_SPEC_CTRL_MSR;
+		mask = 1ULL << 2;
+	}
+
+	rc = pread(msr_fd, &value, sizeof(value), msr);
 	if (rc < 0) {
 		fprintf(stderr, "ERROR: Couldn't read MSR file: %m\n");
 		return -1;
@@ -161,7 +195,7 @@ int read_ssbd_from_msr(int msr_fd, bool *ssbd)
 		return -1;
 	}
 
-	*ssbd = !!(value & 0x4);
+	*ssbd = !!(value & mask);
 	return 0;
 }
 
@@ -176,7 +210,7 @@ int read_ssbd_from_msr(int msr_fd, bool *ssbd)
  *
  * Return 0 on success. -1 on error. 1 on a failed verification.
  */
-int verify_ssbd(int msr_fd, bool expected, time_t seconds)
+int verify_ssbd(int msr_fd, cpu_id cpu_id, bool expected, time_t seconds)
 {
 	time_t cur, stop;
 	int rc;
@@ -190,7 +224,7 @@ int verify_ssbd(int msr_fd, bool expected, time_t seconds)
 	stop += seconds;
 	do {
 		bool actual;
-		int rc = read_ssbd_from_msr(msr_fd, &actual);
+		int rc = read_ssbd_from_msr(msr_fd, cpu_id, &actual);
 
 		if (rc) {
 			fprintf(stderr, "ERROR: Couldn't perform SSBD bit verification\n");
@@ -223,7 +257,7 @@ int verify_ssbd(int msr_fd, bool expected, time_t seconds)
  * returns -1 on error. The child executes the program prog or exits non-zero
  * on error.
  */
-pid_t fork_verify_exec(bool verify, int msr_fd, bool expected,
+pid_t fork_verify_exec(bool verify, int msr_fd, cpu_id cpu_id, bool expected,
 		       const char *prog, char **argv)
 {
 	int pid = fork();
@@ -233,7 +267,7 @@ pid_t fork_verify_exec(bool verify, int msr_fd, bool expected,
 		return -1;
 	} else if (!pid) {
 		/* Do a single SSBD verification in the child after forking */
-		if (verify && verify_ssbd(msr_fd, expected, (time_t) -1))
+		if (verify && verify_ssbd(msr_fd, cpu_id, expected, (time_t) -1))
 			exit(EXIT_FAILURE);
 		exec(prog, argv);
 		exit(EXIT_FAILURE);
@@ -247,11 +281,11 @@ pid_t fork_verify_exec(bool verify, int msr_fd, bool expected,
  *
  * Returns 0 on success. -1 on error. 1 on a failed verification.
  */
-int verify_prctl(int msr_fd, int prctl_value)
+int verify_prctl(int msr_fd, cpu_id cpu_id, int prctl_value)
 {
 	bool ssbd;
 
-	if (read_ssbd_from_msr(msr_fd, &ssbd)) {
+	if (read_ssbd_from_msr(msr_fd, cpu_id, &ssbd)) {
 		fprintf(stderr, "ERROR: Couldn't perform prctl value verification\n");
 		return -1;
 	}
@@ -417,6 +451,12 @@ int usage(const char *prog)
 	fprintf(stderr,
 		"Usage: %s [options] [-- ...]\n\n"
 		"Valid options are:\n"
+		"  -C CPUID      An identifier to describe the CPU that's being used.\n"
+		"                The default is \"intel\". Other valid values are:\n"
+		"                 \"amd-virt\" for AMD virtual speculation controls\n"
+		"                 \"amd-15h\" for AMD Family 15h processors\n"
+		"                 \"amd-16h\" for AMD Family 16h processors\n"
+		"                 \"amd-17h\" for AMD Family 17h processors\n"
 		"  -c CPUNUM     Pin the process to the CPUNUM cpu. The default is 0.\n"
 		"  -q            Don't print the string represenation of the prctl value\n"
 		"  -p VALUE      Use PR_SET_SPECULATION_CTRL with the specified value. Valid\n"
@@ -461,6 +501,7 @@ struct options {
 	const char *exec;	/* Program to exec */
 	char **exec_argv;	/* Arguments to pass to program */
 
+	cpu_id cpu_id;		/* CPU identifier */
 	int cpu_num;		/* CPU number to restrict the process to */
 
 	bool quiet;		/* Whether to print the prctl value */
@@ -476,11 +517,26 @@ void parse_opts(int argc, char **argv, struct options *opts)
 	opts->seconds = (time_t) -1;
 	opts->fork = true;
 	opts->cpu_num = DEFAULT_CPU_NUM;
+	opts->cpu_id = CPU_INTEL;
 
-	while ((o = getopt(argc, argv, "c:e:np:qs:")) != -1) {
+	while ((o = getopt(argc, argv, "C:c:e:np:qs:")) != -1) {
 		char *secs = NULL;
 
 		switch(o) {
+		case 'C': /* CPU identifier */
+			if (!strcmp(optarg, "intel"))
+				opts->cpu_id = CPU_INTEL;
+			else if (!strcmp(optarg, "amd-virt"))
+				opts->cpu_id = CPU_AMD_VIRT;
+			else if (!strcmp(optarg, "amd-15h"))
+				opts->cpu_id = CPU_AMD_15H;
+			else if (!strcmp(optarg, "amd-16h"))
+				opts->cpu_id = CPU_AMD_16H;
+			else if (!strcmp(optarg, "amd-17h"))
+				opts->cpu_id = CPU_AMD_17H;
+			else
+				usage(prog);
+			break;
 		case 'c': /* CPU number */
 			opts->cpu_num = atoi(optarg);
 			break;
@@ -577,23 +633,24 @@ int main(int argc, char **argv)
 		print_prctl(prctl_value);
 
 	/* Verify that the returned prctl value matches with the MSR */
-	if (opts.verify_ssbd && verify_prctl(msr_fd, prctl_value))
+	if (opts.verify_ssbd && verify_prctl(msr_fd, opts.cpu_id, prctl_value))
 		exit(EXIT_FAILURE);
 
 	if (opts.exec && opts.fork) {
 		/* Do a single SSBD verification prior to forking */
 		if (opts.verify_ssbd &&
-		    verify_ssbd(msr_fd, opts.ssbd, (time_t) -1))
+		    verify_ssbd(msr_fd, opts.cpu_id, opts.ssbd, (time_t) -1))
 			exit(EXIT_FAILURE);
 
 		/* This will do a single SSBD verification after forking */
-		pid = fork_verify_exec(opts.verify_ssbd, msr_fd, opts.ssbd,
-				       opts.exec, opts.exec_argv);
+		pid = fork_verify_exec(opts.verify_ssbd, msr_fd, opts.cpu_id,
+				       opts.ssbd, opts.exec, opts.exec_argv);
 		if (pid < 0)
 			exit(EXIT_FAILURE);
 	}
 
-	if (opts.verify_ssbd && verify_ssbd(msr_fd, opts.ssbd, opts.seconds))
+	if (opts.verify_ssbd &&
+	    verify_ssbd(msr_fd, opts.cpu_id, opts.ssbd, opts.seconds))
 		exit(EXIT_FAILURE);
 
 	if (opts.exec && opts.fork)
