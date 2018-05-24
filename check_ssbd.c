@@ -78,7 +78,7 @@
 #endif
 
 #define IA32_SPEC_CTRL_MSR	0x48
-#define DEFAULT_CPU		0
+#define DEFAULT_CPU_NUM		0
 
 /* Waits for the child to exit and exits with the same return value
  *
@@ -111,17 +111,17 @@ int exec(const char *prog, char **argv)
 	return -1;
 }
 
-/* Open the /dev/cpu/CPUNUM/msr file where CPUNUM is specified by cpu
+/* Open the /dev/cpu/CPUNUM/msr file where CPUNUM is specified by cpu_num
  *
  * Returns a valid file descriptor, open for reading, on success. -1 on error.
  */
-int open_msr_fd(int cpu)
+int open_msr_fd(int cpu_num)
 {
 	char msr_path[64];
 	int msr_fd;
 	int rc;
 
-	rc = snprintf(msr_path, sizeof(msr_path), "/dev/cpu/%d/msr", cpu);
+	rc = snprintf(msr_path, sizeof(msr_path), "/dev/cpu/%d/msr", cpu_num);
 	if (rc < 0 || rc >= sizeof(msr_path) ){
 		fprintf(stderr, "ERROR: Couldn't construct the MSR path\n");
 		return -1;
@@ -397,12 +397,12 @@ int load_seccomp_filter(unsigned int flags)
  *
  * Returns 0 on success. -1 on error.
  */
-int restrict_to_cpu(int cpu)
+int restrict_to_cpu(int cpu_num)
 {
 	cpu_set_t set;
 
 	CPU_ZERO(&set);
-	CPU_SET(cpu, &set);
+	CPU_SET(cpu_num, &set);
 	if (sched_setaffinity(0, sizeof(set), &set) < 0) {
 		fprintf(stderr, "ERROR: Couldn't set the CPU affinity mask: %m\n");
 		return -1;
@@ -461,7 +461,7 @@ struct options {
 	const char *exec;	/* Program to exec */
 	char **exec_argv;	/* Arguments to pass to program */
 
-	int cpu;		/* CPU number to restrict the process to */
+	int cpu_num;		/* CPU number to restrict the process to */
 
 	bool quiet;		/* Whether to print the prctl value */
 };
@@ -475,14 +475,14 @@ void parse_opts(int argc, char **argv, struct options *opts)
 	memset(opts, 0, sizeof(*opts));
 	opts->seconds = (time_t) -1;
 	opts->fork = true;
-	opts->cpu = DEFAULT_CPU;
+	opts->cpu_num = DEFAULT_CPU_NUM;
 
 	while ((o = getopt(argc, argv, "c:e:np:qs:")) != -1) {
 		char *secs = NULL;
 
 		switch(o) {
 		case 'c': /* CPU number */
-			opts->cpu = atoi(optarg);
+			opts->cpu_num = atoi(optarg);
 			break;
 		case 'e': /* expected ssbd */
 			opts->verify_ssbd = true;
@@ -556,10 +556,10 @@ int main(int argc, char **argv)
 
 	parse_opts(argc, argv, &opts);
 
-	if (restrict_to_cpu(opts.cpu))
+	if (restrict_to_cpu(opts.cpu_num))
 		exit(EXIT_FAILURE);
 
-	msr_fd = open_msr_fd(opts.cpu);
+	msr_fd = open_msr_fd(opts.cpu_num);
 	if (msr_fd < 0)
 		exit(EXIT_FAILURE);
 
