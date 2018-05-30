@@ -33,7 +33,7 @@
  *
  * Returns 0 on success. -1 on error.
  */
-int read_ssbd_from_msr(int msr_fd, cpu_id cpu_id, bool *ssbd)
+static int read_ssbd_from_msr(int msr_fd, cpu_id cpu_id, bool *ssbd)
 {
 	uint64_t mask, value;
 	off_t msr;

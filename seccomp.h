@@ -26,7 +26,6 @@
 #define SECCOMP_FILTER_FLAG_SPEC_ALLOW (1UL << 2)
 #endif
 
-int seccomp(unsigned int operation, unsigned int flags, void *args);
 int load_seccomp_filter(unsigned int flags);
 
 #endif

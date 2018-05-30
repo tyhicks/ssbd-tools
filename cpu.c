@@ -33,7 +33,7 @@
  *
  * Returns 0 on success. -1 on error.
  */
-int identify_intel_cpu(cpu_id *cpu_id, int msr_fd)
+static int identify_intel_cpu(cpu_id *cpu_id, int msr_fd)
 {
 	uint32_t eax, ebx, ecx, edx;
 
@@ -62,7 +62,7 @@ int identify_intel_cpu(cpu_id *cpu_id, int msr_fd)
  *
  * Returns 0 on success. -1 on error.
  */
-int identify_amd_cpu(cpu_id *cpu_id)
+static int identify_amd_cpu(cpu_id *cpu_id)
 {
 	uint32_t eax, ebx, ecx, edx;
 
@@ -110,7 +110,7 @@ int identify_amd_cpu(cpu_id *cpu_id)
 	return 0;
 }
 
-void uint32_to_string(uint32_t i, char s[4])
+static void uint32_to_string(uint32_t i, char s[4])
 {
 	s[0] = i & 0xFF;
 	s[1] = i >> 8 & 0xFF;

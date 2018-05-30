@@ -38,7 +38,7 @@
  * Exits using the child's exit status if the child exited normally. Exits
  * non-zero on error or if child died unexpectedly.
  */
-int exit_after_child(pid_t pid)
+static int exit_after_child(pid_t pid)
 {
 	int status;
 
@@ -57,7 +57,7 @@ int exit_after_child(pid_t pid)
  *
  * Doesn't return on success. Returns -1 on error.
  */
-int exec(const char *prog, char **argv)
+static int exec(const char *prog, char **argv)
 {
 	execvp(prog, argv);
 	fprintf(stderr, "ERROR: Couldn't execute %s: %m\n", prog);
@@ -72,8 +72,8 @@ int exec(const char *prog, char **argv)
  * returns -1 on error. The child executes the program prog or exits non-zero
  * on error.
  */
-pid_t fork_verify_exec(bool verify, int msr_fd, cpu_id cpu_id, bool expected,
-		       const char *prog, char **argv)
+static pid_t fork_verify_exec(bool verify, int msr_fd, cpu_id cpu_id,
+			      bool expected, const char *prog, char **argv)
 {
 	int pid = fork();
 
@@ -94,7 +94,7 @@ pid_t fork_verify_exec(bool verify, int msr_fd, cpu_id cpu_id, bool expected,
 }
 
 /* Prints the usage and exits with an error */
-int usage(const char *prog)
+static int usage(const char *prog)
 {
 	fprintf(stderr,
 		"Usage: %s [options] [-- ...]\n\n"
@@ -149,7 +149,7 @@ struct options {
 };
 
 /* Parses the command line options and stores the results in opts */
-void parse_opts(int argc, char **argv, struct options *opts)
+static void parse_opts(int argc, char **argv, struct options *opts)
 {
 	const char *prog = argv[0];
 	int o;

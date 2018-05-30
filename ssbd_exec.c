@@ -35,7 +35,7 @@
  *
  * Doesn't return on success. Returns -1 on error.
  */
-int exec(const char *prog, char **argv)
+static int exec(const char *prog, char **argv)
 {
 	execvp(prog, argv);
 	fprintf(stderr, "ERROR: Couldn't execute %s: %m\n", prog);
@@ -43,7 +43,7 @@ int exec(const char *prog, char **argv)
 }
 
 /* Prints the usage and exits with an error */
-int usage(const char *prog)
+static int usage(const char *prog)
 {
 	fprintf(stderr,
 		"Usage: %s [options] [-- prog args ...]\n\n"
@@ -75,7 +75,7 @@ struct options {
 };
 
 /* Parses the command line options and stores the results in opts */
-void parse_opts(int argc, char **argv, struct options *opts)
+static void parse_opts(int argc, char **argv, struct options *opts)
 {
 	const char *prog = argv[0];
 	int o;

@@ -35,9 +35,6 @@ typedef enum { CPU_INTEL,
 	       CPU_SSBD_UNSUPPORTED,
 	      } cpu_id;
 
-int identify_intel_cpu(cpu_id *cpu_id, int msr_fd);
-int identify_amd_cpu(cpu_id *cpu_id);
-void uint32_to_string(uint32_t i, char s[4]);
 int identify_cpu(cpu_id *cpu_id, int msr_fd);
 int restrict_to_cpu(int cpu_num);
 

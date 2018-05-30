@@ -38,7 +38,7 @@
  *
  * See the seccomp(2) man page for details.
  */
-int seccomp(unsigned int operation, unsigned int flags, void *args)
+static int seccomp(unsigned int operation, unsigned int flags, void *args)
 {
 	return syscall(SYS_seccomp, operation, flags, args);
 }
