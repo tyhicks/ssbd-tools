@@ -1,9 +1,8 @@
-To build the program, run make:
+To build the ssbd-exec and ssbd-verify programs, run make:
 
  $ make
 
-It will create an executable called check-ssbd. See the program's usage output
-for details on how to drive it.
+See the each program's usage output for details on how to drive them.
 
 To run some automated tests, run the check target as root:
 
