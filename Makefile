@@ -1,12 +1,20 @@
 CFLAGS = -g -O2 -Wformat -Werror=format-security
 
-OBJECTS = cpu.o msr.o prctl.o seccomp.o ssbd.o
-HEADERS = $(OBJECTS:.o=.h)
+CHECK_OBJECTS = cpu.o msr.o prctl.o seccomp.o ssbd.o
+CHECK_HEADERS = $(CHECK_OBJECTS:.o=.h)
 
-.PHONY: check clean
+EXEC_OBJECTS = msr.o prctl.o seccomp.o ssbd.o
+EXEC_HEADERS = $(EXEC_OBJECTS:.o=.h)
 
-check-ssbd: check_ssbd.c $(OBJECTS) $(HEADERS)
-	$(CC) $(CFLAGS) -o check-ssbd $(OBJECTS) check_ssbd.c
+.PHONY: all check clean
+
+all: check-ssbd ssbd-exec
+
+check-ssbd: check_ssbd.c $(CHECK_OBJECTS) $(CHECK_HEADERS)
+	$(CC) $(CFLAGS) -o check-ssbd $(CHECK_OBJECTS) check_ssbd.c
+
+ssbd-exec: ssbd_exec.c $(EXEC_OBJECTS) $(EXEC_HEADERS)
+	$(CC) $(CFLAGS) -o ssbd-exec $(EXEC_OBJECTS) ssbd_exec.c
 
 $(OBJECTS): %.o : %.c $(HEADERS)
 	$(CC) -c $(CFLAGS) -o $@ $<
@@ -16,4 +24,5 @@ check: check-ssbd
 	@./test.sh && echo PASS
 
 clean:
-	rm -f check-ssbd $(OBJECTS)
+	rm -f check-ssbd $(CHECK_OBJECTS)
+	rm -f ssbd-exec $(EXEC_OBJECTS)
