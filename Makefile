@@ -11,10 +11,10 @@ EXEC_HEADERS = $(EXEC_OBJECTS:.o=.h)
 all: check-ssbd ssbd-exec
 
 check-ssbd: check_ssbd.c $(CHECK_OBJECTS) $(CHECK_HEADERS)
-	$(CC) $(CFLAGS) -o check-ssbd $(CHECK_OBJECTS) check_ssbd.c
+	$(CC) $(CFLAGS) -o $@ $(CHECK_OBJECTS) $<
 
 ssbd-exec: ssbd_exec.c $(EXEC_OBJECTS) $(EXEC_HEADERS)
-	$(CC) $(CFLAGS) -o ssbd-exec $(EXEC_OBJECTS) ssbd_exec.c
+	$(CC) $(CFLAGS) -o $@ $(EXEC_OBJECTS) $<
 
 $(OBJECTS): %.o : %.c $(HEADERS)
 	$(CC) -c $(CFLAGS) -o $@ $<
