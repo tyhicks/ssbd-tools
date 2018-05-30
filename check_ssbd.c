@@ -497,7 +497,8 @@ int identify_amd_cpu(cpu_id *cpu_id)
 		extended = (eax >> 20) & 0xFF;
 
 		if (base < 0xF) {
-			fprintf(stderr, "ERROR: Unsupported AMD family: 0x%x\n",
+			fprintf(stderr,
+				"ERROR: AMD family 0x%x doesn't support SSBD\n",
 				base);
 			return -1;
 		}
@@ -514,7 +515,8 @@ int identify_amd_cpu(cpu_id *cpu_id)
 			*cpu_id = CPU_AMD_17H;
 			break;
 		default:
-			fprintf(stderr, "ERROR: Unsupported AMD family: 0x%x\n",
+			fprintf(stderr,
+				"ERROR: AMD family 0x%x doesn't support SSBD\n",
 				family);
 			return -1;
 		}
