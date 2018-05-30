@@ -1,8 +1,9 @@
 #!/bin/bash
 
-set -e
+set -- $v
 
-tst='./check-ssbd -q'
+e='./ssbd-exec'
+v='./ssbd-verify'
 
 default=0
 if grep spec_store_bypass_disable /proc/cmdline; then
@@ -12,35 +13,31 @@ if grep spec_store_bypass_disable /proc/cmdline; then
 	fi
 fi
 
-$tst -e 0
+$v 0
 
-$tst -s spec-allow -e 0
-$tst -s empty -e 1
+$e -s spec-allow -- $v 0
+$e -s empty -- $v 1
 
-$tst -p enable -e 0
-$tst -p disable -e 1
-$tst -p force-disable -e 1
+$e -p enable -- $v 0
+$e -p disable -- $v 1
+$e -p force-disable -- $v 1
 
-$tst -s spec-allow -p enable -e 0
-$tst -s spec-allow -p disable -e 1
-$tst -s spec-allow -p force-disable -e 1
-$tst -s empty -p enable -e 1
-$tst -s empty -p disable -e 1
-$tst -s empty -p force-disable -e 1
+$e -s spec-allow -p enable -- $v 0
+$e -s spec-allow -p disable -- $v 1
+$e -s spec-allow -p force-disable -- $v 1
+$e -s empty -p enable -- $v 1
+$e -s empty -p disable -- $v 1
+$e -s empty -p force-disable -- $v 1
 
-$tst -e 0 -- $tst -e 0
-$tst -e 0 -- $tst -s spec-allow -e 0
-$tst -e 0 -- $tst -s empty -e 1
+$e -- $e -- $v 0
+$e -- $e -s spec-allow -- $v 0
+$e -- $e -s empty -- $v 1
 
-$tst -e 0 -- $tst -p enable -e 0
-$tst -e 0 -- $tst -p disable -e 1
-$tst -e 0 -- $tst -p force-disable -e 1
+$e -- $e -p enable -- $v 0
+$e -- $e -p disable -- $v 1
+$e -- $e -p force-disable -- $v 1
 
-$tst -s spec-allow -e 0 -- $tst -s spec-allow -e 0
-$tst -s spec-allow -e 0 -- $tst -s empty -e 1
-$tst -s empty -e 1 -- $tst -s spec-allow -e 1
-$tst -s empty -e 1 -- $tst -s empty -e 1
-
-$tst -s spec-allow -e 0:30 -- $tst -p enable -e 0:30 -- \
- $tst -p disable -e 1:30 -- $tst -p force-disable -e 1:30 -- \
- $tst -s empty -e 1:30
+$e -s spec-allow -- $e -s spec-allow -- $v 0
+$e -s spec-allow -- $e -s empty -- $v 1
+$e -s empty -- $e -s spec-allow -- $v 1
+$e -s empty -- $e -s empty -- $v 1

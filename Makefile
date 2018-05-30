@@ -25,7 +25,7 @@ ssbd-verify: ssbd_verify.c $(VERIFY_OBJECTS) $(VERIFY_HEADERS)
 $(OBJECTS): %.o : %.c $(HEADERS)
 	$(CC) -c $(CFLAGS) -o $@ $<
 
-check: check-ssbd
+check: ssbd-exec ssbd-verify
 	@modprobe msr
 	@./test.sh && echo PASS
 
