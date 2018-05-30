@@ -2,9 +2,29 @@ To build the ssbd-exec and ssbd-verify programs, run make:
 
  $ make
 
-See the each program's usage output for details on how to drive them.
+See the examples below, as well as each program's usage output, for details on
+how to drive them.
 
 To run some automated tests, run the check target as root:
 
  $ sudo make check
  PASS
+
+Here are some example usages:
+
+ # View /proc/PID/status when running with a permissive seccomp filter
+ $ ./ssbd-exec -s empty -- grep -e Spec -e Seccomp /proc/self/status
+ Seccomp:        2
+ Speculation_Store_Bypass:       thread force mitigated
+
+ # View /proc/PID/status when using SSBD via the prctl
+ $ ./ssbd-exec -p disable -- grep -e Spec -e Seccomp /proc/self/status
+ Seccomp:        0
+ Speculation_Store_Bypass:       thread mitigated
+
+ # Verifying that SSBD is not in use when enabling speculation
+ $ ./ssbd-exec -p enable -- sudo ./ssbd-verify 0
+
+ # Negative test to verify that SSBD is in use when disabling speculation
+ $ ./ssbd-exec -p disable -- sudo ./ssbd-verify 0
+ FAIL: SSBD bit verification failed (expected 0, got 1)
