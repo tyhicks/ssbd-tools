@@ -27,6 +27,8 @@
 #include "cpu.h"
 
 int read_ssbd_from_msr(int msr_fd, cpu_id cpu_id, bool *ssbd);
-int verify_ssbd(int msr_fd, cpu_id cpu_id, bool expected, time_t seconds);
+int verify_ssbd_bit(int msr_fd, cpu_id cpu_id, bool expected, time_t seconds);
+int verify_ssbd_prctl(int msr_fd, cpu_id cpu_id, int prctl_value);
+void print_ssbd_prctl(int ssbd);
 
 #endif

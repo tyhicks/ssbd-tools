@@ -58,9 +58,7 @@
 #define PR_SPEC_FORCE_DISABLE	(1UL << 3)
 #endif
 
-int verify_prctl(int msr_fd, cpu_id cpu_id, int prctl_value);
 int get_prctl(void);
 int set_prctl(unsigned long value);
-void print_prctl(int ssbd);
 
 #endif

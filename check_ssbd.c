@@ -82,7 +82,8 @@ pid_t fork_verify_exec(bool verify, int msr_fd, cpu_id cpu_id, bool expected,
 		return -1;
 	} else if (!pid) {
 		/* Do a single SSBD verification in the child after forking */
-		if (verify && verify_ssbd(msr_fd, cpu_id, expected, (time_t) -1))
+		if (verify &&
+		    verify_ssbd_bit(msr_fd, cpu_id, expected, (time_t) -1))
 			exit(EXIT_FAILURE);
 		exec(prog, argv);
 		exit(EXIT_FAILURE);
@@ -267,16 +268,16 @@ int main(int argc, char **argv)
 		exit(EXIT_FAILURE);
 
 	if (!opts.quiet)
-		print_prctl(prctl_value);
+		print_ssbd_prctl(prctl_value);
 
 	/* Verify that the returned prctl value matches with the MSR */
-	if (opts.verify_ssbd && verify_prctl(msr_fd, cpu_id, prctl_value))
+	if (opts.verify_ssbd && verify_ssbd_prctl(msr_fd, cpu_id, prctl_value))
 		exit(EXIT_FAILURE);
 
 	if (opts.exec && opts.fork) {
 		/* Do a single SSBD verification prior to forking */
 		if (opts.verify_ssbd &&
-		    verify_ssbd(msr_fd, cpu_id, opts.ssbd, (time_t) -1))
+		    verify_ssbd_bit(msr_fd, cpu_id, opts.ssbd, (time_t) -1))
 			exit(EXIT_FAILURE);
 
 		/* This will do a single SSBD verification after forking */
@@ -287,7 +288,7 @@ int main(int argc, char **argv)
 	}
 
 	if (opts.verify_ssbd &&
-	    verify_ssbd(msr_fd, cpu_id, opts.ssbd, opts.seconds))
+	    verify_ssbd_bit(msr_fd, cpu_id, opts.ssbd, opts.seconds))
 		exit(EXIT_FAILURE);
 
 	if (opts.exec && opts.fork)

@@ -3,7 +3,7 @@ CFLAGS = -g -O2 -Wformat -Werror=format-security
 CHECK_OBJECTS = cpu.o msr.o prctl.o seccomp.o ssbd.o
 CHECK_HEADERS = $(CHECK_OBJECTS:.o=.h)
 
-EXEC_OBJECTS = msr.o prctl.o seccomp.o ssbd.o
+EXEC_OBJECTS = prctl.o seccomp.o
 EXEC_HEADERS = $(EXEC_OBJECTS:.o=.h)
 
 .PHONY: all check clean

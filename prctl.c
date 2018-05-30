@@ -24,46 +24,6 @@
 #include <stdio.h>
 #include <sys/prctl.h>
 
-#include "cpu.h"
-#include "ssbd.h"
-
-/* Verify that the prctl value matches the SSBD bit from the IA32_SPEC_CTRL MSR
- *
- * Returns 0 on success. -1 on error. 1 on a failed verification.
- */
-int verify_prctl(int msr_fd, cpu_id cpu_id, int prctl_value)
-{
-	bool ssbd;
-
-	if (read_ssbd_from_msr(msr_fd, cpu_id, &ssbd)) {
-		fprintf(stderr, "ERROR: Couldn't perform prctl value verification\n");
-		return -1;
-	}
-
-	switch (prctl_value) {
-	case PR_SPEC_NOT_AFFECTED:
-	case PR_SPEC_PRCTL | PR_SPEC_ENABLE:
-		if (ssbd) {
-			fprintf(stderr, "FAIL: SSBD bit of the IA32_SPEC_CTRL MSR is unexpectedly set\n");
-			return 1;
-		}
-		break;
-	case PR_SPEC_PRCTL | PR_SPEC_DISABLE:
-	case PR_SPEC_PRCTL | PR_SPEC_FORCE_DISABLE:
-	case PR_SPEC_DISABLE:
-		if (!ssbd) {
-			fprintf(stderr, "FAIL: SSBD bit of the IA32_SPEC_CTRL MSR is unexpectedly clear\n");
-			return 1;
-		}
-		break;
-	default:
-		fprintf(stderr, "ERROR: Couldn't verify Unknown prctl value (0x%x)\n",
-			prctl_value);
-		return -1;
-	}
-
-	return 0;
-}
 
 /* Get the value of the PR_SPEC_STORE_BYPASS prctl
  *
@@ -108,32 +68,4 @@ int set_prctl(unsigned long value)
 	}
 
 	return 0;
-}
-
-/* Prints a string representation of the PR_SPEC_STORE_BYPASS prctl value */
-void print_prctl(int ssbd)
-{
-	/* The printed strings should match what's in the kernel's
-	 * task_seccomp() function
-	 */
-	switch (ssbd) {
-	case PR_SPEC_NOT_AFFECTED:
-		printf("not vulnerable\n");
-		break;
-	case PR_SPEC_PRCTL | PR_SPEC_DISABLE:
-		printf("thread mitigated\n");
-		break;
-	case PR_SPEC_PRCTL | PR_SPEC_FORCE_DISABLE:
-		printf("thread force mitigated\n");
-		break;
-	case PR_SPEC_PRCTL | PR_SPEC_ENABLE:
-		printf("thread vulnerable\n");
-		break;
-	case PR_SPEC_DISABLE:
-		printf("globally mitigated\n");
-		break;
-	default:
-		printf("vulnerable\n");
-		break;
-	}
 }
