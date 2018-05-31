@@ -28,6 +28,7 @@
 #include <sys/wait.h>
 #include <unistd.h>
 
+#include "cpu.h"
 #include "prctl.h"
 #include "seccomp.h"
 
@@ -48,6 +49,8 @@ static int usage(const char *prog)
 	fprintf(stderr,
 		"Usage: %s [options] [-- prog args ...]\n\n"
 		"Valid options are:\n"
+		"  -c CPUNUM     Pin the process to the CPUNUM cpu. The default is to\n"
+		"                not pin the process.\n"
 		"  -p VALUE      Use PR_SET_SPECULATION_CTRL with the specified value. Valid\n"
 		"                values for VALUE are:\n"
 		"                 \"enable\" for PR_SPEC_ENABLE\n"
@@ -70,6 +73,9 @@ struct options {
 	bool seccomp;			/* Whether to load a seccomp filter */
 	unsigned int seccomp_flags;	/* The seccomp filter flags */
 
+	bool cpu;		/* Whether to restrict the process to a CPU */
+	int cpu_num;		/* CPU number to restrict the process to */
+
 	const char *exec;	/* Program to exec */
 	char **exec_argv;	/* Arguments to pass to program */
 };
@@ -82,10 +88,14 @@ static void parse_opts(int argc, char **argv, struct options *opts)
 
 	memset(opts, 0, sizeof(*opts));
 
-	while ((o = getopt(argc, argv, "p:s:")) != -1) {
+	while ((o = getopt(argc, argv, "c:p:s:")) != -1) {
 		char *secs = NULL;
 
 		switch(o) {
+		case 'c': /* CPU number */
+			opts->cpu = true;
+			opts->cpu_num = atoi(optarg);
+			break;
 		case 'p': /* prctl */
 			opts->prctl = true;
 			if (!strcmp(optarg, "enable"))
@@ -127,6 +137,9 @@ int main(int argc, char **argv)
 	int prctl_value;
 
 	parse_opts(argc, argv, &opts);
+
+	if (opts.cpu && restrict_to_cpu(opts.cpu_num))
+		exit(EXIT_FAILURE);
 
 	if (opts.prctl && set_prctl(opts.prctl_value))
 		exit(EXIT_FAILURE);

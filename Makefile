@@ -1,6 +1,6 @@
 CFLAGS = -g -O2 -Wformat -Werror=format-security
 
-EXEC_OBJECTS = prctl.o seccomp.o
+EXEC_OBJECTS = cpu.o prctl.o seccomp.o
 EXEC_HEADERS = $(EXEC_OBJECTS:.o=.h)
 
 VERIFY_OBJECTS = cpu.o prctl.o ssbd.o
