@@ -22,10 +22,12 @@
 #ifndef __SSBD_H
 #define __SSBD_H
 
+#include <stdbool.h>
 #include <time.h>
 
 #include "cpu.h"
 
+int toggle_ssbd(int msr_fd, cpu_id cpu_id);
 int verify_ssbd_bit(int msr_fd, cpu_id cpu_id, bool expected, time_t seconds);
 int verify_ssbd_prctl(int msr_fd, cpu_id cpu_id, int prctl_value);
 void print_ssbd_prctl(int ssbd);

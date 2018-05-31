@@ -26,6 +26,41 @@
 #include "cpu.h"
 #include "prctl.h"
 
+/* Determine the SSBD bit's MSR and offset from the MSR corresponding to cpu_id
+ *
+ * Returns 0 on success. -1 on error.
+ */
+static int get_ssbd_msr_and_offset(off_t *msr, off_t *offset, cpu_id cpu_id)
+{
+	switch (cpu_id) {
+	case CPU_AMD_VIRT:
+		*msr = AMD64_VIRT_SPEC_CTRL_MSR;
+		*offset = 2;
+		break;
+	case CPU_AMD_15H:
+		*msr = AMD64_LS_CFG_MSR;
+		*offset = 54;
+		break;
+	case CPU_AMD_16H:
+		*msr = AMD64_LS_CFG_MSR;
+		*offset = 33;
+		break;
+	case CPU_AMD_17H:
+		*msr = AMD64_LS_CFG_MSR;
+		*offset = 10;
+		break;
+	case CPU_INTEL:
+		*msr = IA32_SPEC_CTRL_MSR;
+		*offset = 2;
+		break;
+	default:
+		fprintf(stderr, "ERROR: Unknown CPU (%d)\n", cpu_id);
+		return -1;
+	}
+
+	return 0;
+}
+
 /* Read the SSBD bit from the MSR corresponding to cpu_id
  *
  * Sets *ssbd to true if the bit is 1, false if the bit is 0.
@@ -34,36 +69,43 @@
  */
 static int read_ssbd_from_msr(int msr_fd, cpu_id cpu_id, bool *ssbd)
 {
-	uint64_t mask, value;
-	off_t msr;
+	off_t msr, offset;
+	uint64_t value;
 
-	switch (cpu_id) {
-	case CPU_AMD_VIRT:
-		msr = AMD64_VIRT_SPEC_CTRL_MSR;
-		mask = 1ULL << 2;
-		break;
-	case CPU_AMD_15H:
-		msr = AMD64_LS_CFG_MSR;
-		mask = 1ULL << 54;
-		break;
-	case CPU_AMD_16H:
-		msr = AMD64_LS_CFG_MSR;
-		mask = 1ULL << 33;
-		break;
-	case CPU_AMD_17H:
-		msr = AMD64_LS_CFG_MSR;
-		mask = 1ULL << 10;
-		break;
-	case CPU_INTEL:
-	default:
-		msr = IA32_SPEC_CTRL_MSR;
-		mask = 1ULL << 2;
-	}
+	if (get_ssbd_msr_and_offset(&msr, &offset, cpu_id))
+		return -1;
 
 	if (read_msr(&value, msr_fd, msr))
 		return -1;
 
-	*ssbd = !!(value & mask);
+	*ssbd = !!(value & (1ULL << offset));
+	return 0;
+}
+
+/* Repeatedly toggle the SSBD bit
+ *
+ * Initially reads the MSR containing the SSBD bit and then repeatedly toggles
+ * the SSBD bit, preserving the other bits in the MSR, in an endless loop.
+ *
+ * Doesn't return on success. Returns -1 on error.
+ */
+int toggle_ssbd(int msr_fd, cpu_id cpu_id)
+{
+	off_t msr, offset;
+	uint64_t value;
+
+	if (get_ssbd_msr_and_offset(&msr, &offset, cpu_id))
+		return -1;
+
+	if (read_msr(&value, msr_fd, msr))
+		return -1;
+
+	for (;;) {
+		value ^= 1ULL << offset;
+		if (write_msr(msr_fd, msr, value))
+			return -1;
+	}
+
 	return 0;
 }
 

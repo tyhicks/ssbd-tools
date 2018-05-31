@@ -22,6 +22,7 @@
 #ifndef __CPU_H
 #define __CPU_H
 
+#include <stdbool.h>
 #include <stdint.h>
 
 #define DEFAULT_CPU_NUM		0
@@ -40,8 +41,9 @@ typedef enum { CPU_INTEL,
 	       CPU_SSBD_UNSUPPORTED,
 	      } cpu_id;
 
-int open_msr_fd(int cpu_num);
+int open_msr_fd(int cpu_num, bool writable);
 int read_msr(uint64_t *value, int msr_fd, off_t msr);
+int write_msr(int msr_fd, off_t msr, uint64_t value);
 int identify_cpu(cpu_id *cpu_id, int msr_fd);
 int restrict_to_cpu(int cpu_num);
 

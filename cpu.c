@@ -24,6 +24,7 @@
 #include <errno.h>
 #include <fcntl.h>
 #include <sched.h>
+#include <stdbool.h>
 #include <stdint.h>
 #include <stdio.h>
 #include <string.h>
@@ -36,7 +37,7 @@
  *
  * Returns a valid file descriptor, open for reading, on success. -1 on error.
  */
-int open_msr_fd(int cpu_num)
+int open_msr_fd(int cpu_num, bool writable)
 {
 	char msr_path[64];
 	int msr_fd;
@@ -48,7 +49,7 @@ int open_msr_fd(int cpu_num)
 		return -1;
 	}
 
-	msr_fd = open(msr_path, O_RDONLY | O_CLOEXEC);
+	msr_fd = open(msr_path, (writable ? O_RDWR : O_RDONLY) | O_CLOEXEC);
 	if (msr_fd < 0) {
 		if (errno == ENOENT) {
 			fprintf(stderr, "ERROR: The msr kernel module is not loaded\n");
@@ -76,6 +77,26 @@ int read_msr(uint64_t *value, int msr_fd, off_t msr)
 		return -1;
 	} else if (rc != sizeof(value)) {
 		fprintf(stderr, "ERROR: Short read of the MSR file\n");
+		return -1;
+	}
+
+	return 0;
+}
+
+/* Write the value to the MSR
+ *
+ * Returns 0 on success. -1 on error.
+ */
+int write_msr(int msr_fd, off_t msr, uint64_t value)
+{
+	int rc;
+
+	rc = pwrite(msr_fd, &value, sizeof(value), msr);
+	if (rc < 0) {
+		fprintf(stderr, "ERROR: Couldn't write to MSR file: %m\n");
+		return -1;
+	} else if (rc != sizeof(value)) {
+		fprintf(stderr, "ERROR: Short write of the MSR file\n");
 		return -1;
 	}
 

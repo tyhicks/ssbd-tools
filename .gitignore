@@ -1,3 +1,4 @@
 *.o
 ssbd-exec
+ssbd-toggle
 ssbd-verify

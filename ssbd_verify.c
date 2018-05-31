@@ -150,7 +150,7 @@ int main(int argc, char **argv)
 	if (restrict_to_cpu(opts.cpu_num))
 		exit(EXIT_FAILURE);
 
-	msr_fd = open_msr_fd(opts.cpu_num);
+	msr_fd = open_msr_fd(opts.cpu_num, false);
 	if (msr_fd < 0)
 		exit(EXIT_FAILURE);
 

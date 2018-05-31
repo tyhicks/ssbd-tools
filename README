@@ -1,4 +1,4 @@
-To build the ssbd-exec and ssbd-verify programs, run make:
+To build the ssbd-exec, ssbd-toggle, and ssbd-verify programs, run make:
 
  $ make
 
