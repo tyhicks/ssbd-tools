@@ -28,7 +28,6 @@
 #include <unistd.h>
 
 #include "cpu.h"
-#include "msr.h"
 #include "prctl.h"
 #include "ssbd.h"
 

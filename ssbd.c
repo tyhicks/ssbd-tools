@@ -24,7 +24,6 @@
 #include <time.h>
 
 #include "cpu.h"
-#include "msr.h"
 #include "prctl.h"
 
 /* Read the SSBD bit from the MSR corresponding to cpu_id

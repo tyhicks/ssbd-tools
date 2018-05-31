@@ -21,13 +21,66 @@
 
 #define _GNU_SOURCE
 #include <cpuid.h>
+#include <errno.h>
+#include <fcntl.h>
 #include <sched.h>
 #include <stdint.h>
 #include <stdio.h>
 #include <string.h>
+#include <sys/types.h>
+#include <unistd.h>
 
 #include "cpu.h"
-#include "msr.h"
+
+/* Open the /dev/cpu/CPUNUM/msr file where CPUNUM is specified by cpu_num
+ *
+ * Returns a valid file descriptor, open for reading, on success. -1 on error.
+ */
+int open_msr_fd(int cpu_num)
+{
+	char msr_path[64];
+	int msr_fd;
+	int rc;
+
+	rc = snprintf(msr_path, sizeof(msr_path), "/dev/cpu/%d/msr", cpu_num);
+	if (rc < 0 || rc >= sizeof(msr_path) ){
+		fprintf(stderr, "ERROR: Couldn't construct the MSR path\n");
+		return -1;
+	}
+
+	msr_fd = open(msr_path, O_RDONLY | O_CLOEXEC);
+	if (msr_fd < 0) {
+		if (errno == ENOENT) {
+			fprintf(stderr, "ERROR: The msr kernel module is not loaded\n");
+		} else {
+			fprintf(stderr, "ERROR: Couldn't open MSR file (%s): %m\n",
+				msr_path);
+		}
+		return -1;
+	}
+
+	return msr_fd;
+}
+
+/* Read the value from the MSR
+ *
+ * Returns 0 on success. -1 on error.
+ */
+int read_msr(uint64_t *value, int msr_fd, off_t msr)
+{
+	int rc;
+
+	rc = pread(msr_fd, value, sizeof(*value), msr);
+	if (rc < 0) {
+		fprintf(stderr, "ERROR: Couldn't read MSR file: %m\n");
+		return -1;
+	} else if (rc != sizeof(value)) {
+		fprintf(stderr, "ERROR: Short read of the MSR file\n");
+		return -1;
+	}
+
+	return 0;
+}
 
 /* Sets cpu_id in accordance to SSBD support of the current Intel processor
  *

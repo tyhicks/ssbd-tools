@@ -26,6 +26,11 @@
 
 #define DEFAULT_CPU_NUM		0
 
+#define IA32_SPEC_CTRL_MSR		0x48
+#define IA32_ARCH_CAPABILITIES_MSR	0x10A
+#define AMD64_VIRT_SPEC_CTRL_MSR	0xc001011f
+#define AMD64_LS_CFG_MSR		0xc0011020
+
 typedef enum { CPU_INTEL,
 	       CPU_AMD_VIRT,
 	       CPU_AMD_15H,
@@ -35,6 +40,8 @@ typedef enum { CPU_INTEL,
 	       CPU_SSBD_UNSUPPORTED,
 	      } cpu_id;
 
+int open_msr_fd(int cpu_num);
+int read_msr(uint64_t *value, int msr_fd, off_t msr);
 int identify_cpu(cpu_id *cpu_id, int msr_fd);
 int restrict_to_cpu(int cpu_num);
 
