@@ -1,6 +1,6 @@
 #!/bin/bash
 
-set -- $v
+set -e
 
 e='./ssbd-exec'
 v='./ssbd-verify'
