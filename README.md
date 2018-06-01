@@ -86,6 +86,12 @@ SSBD.
 
 #### Using ssbd-exec
 
+* View /proc/PID/status to show that tasks don't use SSBD by default
+```
+ $ ./ssbd-exec -- grep Spec /proc/self/status
+ Speculation_Store_Bypass:	thread vulnerable
+```
+
 * View /proc/PID/status when using SSBD via the prctl
 ```
  $ ./ssbd-exec -p disable -- grep -e Spec -e Seccomp /proc/self/status
